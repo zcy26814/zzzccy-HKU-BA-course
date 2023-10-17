@@ -1,0 +1,251 @@
+,name,year,rating,vote,length,vote2
+0,The Shawshank Redemption,1994,9.3,2.8M,2h 22m,2800000
+1,The Godfather,1972,9.2,2M,2h 55m,2000000
+2,The Dark Knight,2008,9.0,2.8M,2h 32m,2800000
+3,The Godfather Part II,1974,9.0,1.3M,3h 22m,1300000
+4,12 Angry Men,1957,9.0,835K,1h 36m,835000
+5,Schindler's List,1993,9.0,1.4M,3h 15m,1400000
+6,The Lord of the Rings: The Return of the King,2003,9.0,1.9M,3h 21m,1900000
+7,Pulp Fiction,1994,8.9,2.2M,2h 34m,2200000
+8,The Lord of the Rings: The Fellowship of the Ring,2001,8.8,1.9M,2h 58m,1900000
+9,Lonely Hero in the Duel of Hell's Gate,1966,8.8,791K,2h 41m,791000
+10,Forrest Gump,1994,8.8,2.2M,2h 22m,2200000
+11,Fight Club,1999,8.8,2.2M,2h 19m,2200000
+12,The Lord of the Rings: The Two Towers,2002,8.8,1.7M,2h 59m,1700000
+13,Inception,2010,8.8,2.5M,2h 28m,2500000
+14,Star Wars: Episode V - The Empire Strikes Back,1980,8.7,1.3M,2h 4m,1300000
+15,The Matrix,1999,8.7,2M,2h 16m,2000000
+16,GoodFellas,1990,8.7,1.2M,2h 25m,1200000
+17,One Flew Over the Cuckoo's Nest,1975,8.7,1M,2h 13m,1000000
+18,Se7en,1995,8.6,1.7M,2h 7m,1700000
+19,Spider-Man: Across the Spider-Verse,2023,8.7,274K,2h 20m,274000
+20,It's a Wonderful Life,1946,8.6,480K,2h 10m,480000
+21,Shichinin no samurai,1954,8.6,359K,3h 27m,359000
+22,Interstellar,2014,8.7,2M,2h 49m,2000000
+23,The Silence of the Lambs,1991,8.6,1.5M,1h 58m,1500000
+24,Saving Private Ryan,1998,8.6,1.5M,2h 49m,1500000
+25,Cidade de Deus,2002,8.6,783K,2h 10m,783000
+26,La vita è bella,1997,8.6,724K,1h 56m,724000
+27,The Green Mile,1999,8.6,1.4M,3h 9m,1400000
+28,Star Wars,1977,8.6,1.4M,2h 1m,1400000
+29,Terminator 2: Judgment Day,1991,8.6,1.1M,2h 17m,1100000
+30,Back to the Future,1985,8.5,1.3M,1h 56m,1300000
+31,Sen to Chihiro no kamikakushi,2001,8.6,813K,2h 5m,813000
+32,The Pianist,2002,8.5,881K,2h 30m,881000
+33,Psycho,1960,8.5,701K,1h 49m,701000
+34,Gisaengchung,2019,8.5,893K,2h 12m,893000
+35,Gladiator,2000,8.5,1.6M,2h 35m,1600000
+36,The Lion King,1994,8.5,1.1M,1h 28m,1100000
+37,Léon,1994,8.5,1.2M,1h 50m,1200000
+38,American History X,1998,8.5,1.2M,1h 59m,1200000
+39,The Departed,2006,8.5,1.4M,2h 31m,1400000
+40,Whiplash,2014,8.5,936K,1h 46m,936000
+41,The Prestige,2006,8.5,1.4M,2h 10m,1400000
+42,The Usual Suspects,1995,8.5,1.1M,1h 46m,1100000
+43,Hotaru no haka,1988,8.5,297K,1h 29m,297000
+44,Seppuku,1962,8.6,64K,2h 13m,64000
+45,Oppenheimer,2023,8.5,457K,3h ,457000
+46,Casablanca,1942,8.5,593K,1h 42m,593000
+47,Intouchables,2011,8.5,901K,1h 52m,901000
+48,Modern Times,1936,8.5,253K,1h 27m,253000
+49,Nuovo Cinema Paradiso,1988,8.5,275K,2h 35m,275000
+50,C'era una volta il West,1968,8.5,342K,2h 45m,342000
+51,Rear Window,1954,8.5,510K,1h 52m,510000
+52,Alien,1979,8.5,922K,1h 57m,922000
+53,City Lights,1931,8.5,192K,1h 27m,192000
+54,Apocalypse Now,1979,8.4,693K,2h 27m,693000
+55,Memento,2000,8.4,1.3M,1h 53m,1300000
+56,Django Unchained,2012,8.5,1.6M,2h 45m,1600000
+57,Raiders of the Lost Ark,1981,8.4,1M,1h 55m,1000000
+58,WALL-E,2008,8.4,1.2M,1h 38m,1200000
+59,Das Leben der Anderen,2006,8.4,402K,2h 17m,402000
+60,Sunset Blvd.,1950,8.4,231K,1h 50m,231000
+61,Paths of Glory,1957,8.4,207K,1h 28m,207000
+62,Avengers: Infinity War,2018,8.4,1.2M,2h 29m,1200000
+63,The Shining,1980,8.4,1.1M,2h 26m,1100000
+64,The Great Dictator,1940,8.4,232K,2h 5m,232000
+65,Witness for the Prosecution,1957,8.4,133K,1h 56m,133000
+66,Spider-Man: Into the Spider-Verse,2018,8.4,633K,1h 57m,633000
+67,Alien 2,1986,8.4,745K,2h 17m,745000
+68,Inglourious Basterds,2009,8.4,1.5M,2h 33m,1500000
+69,The Dark Knight Rises,2012,8.4,1.8M,2h 44m,1800000
+70,American Beauty,1999,8.3,1.2M,2h 2m,1200000
+71,Dr. Strangelove or: How I Learned to Stop Worrying and Love the Bomb,1964,8.4,508K,1h 35m,508000
+72,Oldeuboi,2003,8.4,613K,2h ,613000
+73,Coco,2017,8.4,558K,1h 45m,558000
+74,Amadeus,1984,8.4,418K,2h 40m,418000
+75,Toy Story,1995,8.3,1M,1h 21m,1000000
+76,Das Boot,1981,8.4,259K,2h 29m,259000
+77,Braveheart,1995,8.3,1.1M,2h 58m,1100000
+78,Avengers: Endgame,2019,8.4,1.2M,3h 1m,1200000
+79,小丑,2019,8.4,1.4M,2h 2m,1400000
+80,Mononoke-hime,1997,8.3,417K,2h 14m,417000
+81,Good Will Hunting,1997,8.3,1M,2h 6m,1000000
+82,Once Upon a Time in America,1984,8.3,368K,3h 49m,368000
+83,Your Name.,2016,8.4,301K,1h 46m,301000
+84,3 Idiots,2009,8.4,419K,2h 50m,419000
+85,High and Low,1963,8.4,50K,2h 23m,50000
+86,Singin' in the Rain,1952,8.3,254K,1h 43m,254000
+87,Capharnaüm,2018,8.4,100K,2h 6m,100000
+88,Requiem for a Dream,2000,8.3,877K,1h 42m,877000
+89,Toy Story 3,2010,8.3,871K,1h 43m,871000
+90,Come and See,1985,8.4,91K,2h 22m,91000
+91,Star Wars: Episode VI - Return of the Jedi,1983,8.3,1.1M,2h 11m,1100000
+92,Eternal Sunshine of the Spotless Mind,2004,8.3,1M,1h 48m,1000000
+93,2001: A Space Odyssey,1968,8.3,700K,2h 29m,700000
+94,Jagten,2012,8.3,351K,1h 55m,351000
+95,Reservoir Dogs,1992,8.3,1.1M,1h 39m,1100000
+96,Ikiru,1952,8.3,84K,2h 23m,84000
+97,Lawrence of Arabia,1962,8.3,306K,3h 38m,306000
+98,Citizen Kane,1941,8.3,457K,1h 59m,457000
+99,M - Eine Stadt sucht einen Mörder,1931,8.3,165K,1h 57m,165000
+100,The Apartment,1960,8.3,191K,2h 5m,191000
+101,North by Northwest,1959,8.3,339K,2h 16m,339000
+102,Vertigo,1958,8.3,417K,2h 8m,417000
+103,Double Indemnity,1944,8.3,164K,1h 47m,164000
+104,Le fabuleux destin d'Amélie Poulain,2001,8.3,780K,2h 2m,780000
+105,Scarface,1983,8.3,887K,2h 50m,887000
+106,Full Metal Jacket,1987,8.3,772K,1h 56m,772000
+107,A Clockwork Orange,1971,8.3,862K,2h 16m,862000
+108,Incendies,2010,8.3,190K,2h 11m,190000
+109,Heat,1995,8.3,695K,2h 50m,695000
+110,Up,2009,8.3,1.1M,1h 36m,1100000
+111,Hamilton,2020,8.3,107K,2h 40m,107000
+112,To Kill a Mockingbird,1962,8.3,327K,2h 9m,327000
+113,The Sting,1973,8.3,273K,2h 9m,273000
+114,Jodaeiye Nader az Simin,2011,8.3,253K,2h 3m,253000
+115,Indiana Jones and the Last Crusade,1989,8.2,793K,2h 7m,793000
+116,Metropolis,1927,8.3,181K,2h 33m,181000
+117,Die Hard,1988,8.2,914K,2h 12m,914000
+118,Taare Zameen Par,2007,8.3,202K,2h 45m,202000
+119,Snatch,2000,8.2,888K,1h 44m,888000
+120,Ladri di biciclette,1948,8.3,171K,1h 29m,171000
+121,L.A. Confidential,1997,8.2,602K,2h 18m,602000
+122,Taxi Driver,1976,8.2,888K,1h 54m,888000
+123,1917,2019,8.2,644K,1h 59m,644000
+124,Downfall,2004,8.2,368K,2h 36m,368000
+125,Dangal,2016,8.3,202K,2h 41m,202000
+126,Per qualche dollaro in più,1965,8.2,268K,2h 12m,268000
+127,Batman Begins,2005,8.2,1.5M,2h 20m,1500000
+128,Top Gun: Maverick,2022,8.3,634K,2h 10m,634000
+129,Some Like It Hot,1959,8.2,277K,2h 1m,277000
+130,The Kid,1921,8.2,132K,1h 8m,132000
+131,The Wolf of Wall Street,2013,8.2,1.5M,3h ,1500000
+132,The Father,2020,8.2,179K,1h 37m,179000
+133,Green Book,2018,8.2,538K,2h 10m,538000
+134,All About Eve,1950,8.2,136K,2h 18m,136000
+135,Judgment at Nuremberg,1961,8.3,82K,2h 59m,82000
+136,The Truman Show,1998,8.2,1.2M,1h 43m,1200000
+137,There Will Be Blood,2007,8.2,621K,2h 38m,621000
+138,Casino,1995,8.2,547K,2h 58m,547000
+139,Ran,1985,8.2,132K,2h 40m,132000
+140,Shutter Island,2010,8.2,1.4M,2h 18m,1400000
+141,El laberinto del fauno,2006,8.2,690K,1h 58m,690000
+142,The Sixth Sense,1999,8.2,1M,1h 47m,1000000
+143,Unforgiven,1992,8.2,427K,2h 10m,427000
+144,Jurassic Park,1993,8.2,1M,2h 7m,1000000
+145,A Beautiful Mind,2001,8.2,965K,2h 15m,965000
+146,The Treasure of the Sierra Madre,1948,8.2,130K,2h 6m,130000
+147,Yôjinbô,1961,8.2,128K,1h 50m,128000
+148,No Country for Old Men,2007,8.2,1M,2h 2m,1000000
+149,Kill Bill: Vol. 1,2003,8.2,1.2M,1h 51m,1200000
+150,Monty Python and the Holy Grail,1975,8.2,559K,1h 31m,559000
+151,The Thing,1982,8.2,449K,1h 49m,449000
+152,The Great Escape,1963,8.2,253K,2h 52m,253000
+153,Rashômon,1950,8.2,176K,1h 28m,176000
+154,Finding Nemo,2003,8.2,1.1M,1h 40m,1100000
+155,The Elephant Man,1980,8.2,252K,2h 4m,252000
+156,Chinatown,1974,8.2,341K,2h 10m,341000
+157,Hauru no ugoku shiro,2004,8.2,426K,1h 59m,426000
+158,Gone with the Wind,1939,8.2,327K,3h 58m,327000
+159,Dial M for Murder,1954,8.2,184K,1h 45m,184000
+160,V for Vendetta,2005,8.2,1.2M,2h 12m,1200000
+161,Raging Bull,1980,8.1,370K,2h 9m,370000
+162,Spider-Man: No Way Home,2021,8.2,835K,2h 28m,835000
+163,"Lock, Stock and Two Smoking Barrels",1998,8.1,604K,1h 47m,604000
+164,El secreto de sus ojos,2009,8.2,218K,2h 9m,218000
+165,Prisoners,2013,8.1,774K,2h 33m,774000
+166,Inside Out,2015,8.1,756K,1h 35m,756000
+167,"Three Billboards Outside Ebbing, Missouri",2017,8.1,538K,1h 55m,538000
+168,The Bridge on the River Kwai,1957,8.1,229K,2h 41m,229000
+169,Trainspotting,1996,8.1,711K,1h 33m,711000
+170,Fargo,1996,8.1,704K,1h 38m,704000
+171,Warrior,2011,8.1,488K,2h 20m,488000
+172,Gran Torino,2008,8.1,800K,1h 56m,800000
+173,Catch Me If You Can,2002,8.1,1.1M,2h 21m,1100000
+174,My Neighbor Totoro,1988,8.1,363K,1h 26m,363000
+175,Million Dollar Baby,2004,8.1,709K,2h 12m,709000
+176,Klaus,2019,8.2,172K,1h 36m,172000
+177,Harry Potter and the Deathly Hallows - Part 2,2011,8.1,920K,2h 10m,920000
+178,Children of Heaven,1997,8.2,78K,1h 29m,78000
+179,Blade Runner,1982,8.1,802K,1h 57m,802000
+180,12 Years a Slave,2013,8.1,726K,2h 14m,726000
+181,Before Sunrise,1995,8.1,329K,1h 41m,329000
+182,The Grand Budapest Hotel,2014,8.1,861K,1h 39m,861000
+183,The Gold Rush,1925,8.1,116K,1h 35m,116000
+184,Ben-Hur,1959,8.1,248K,3h 32m,248000
+185,Gone Girl,2014,8.1,1M,2h 29m,1000000
+186,Barry Lyndon,1975,8.1,178K,3h 5m,178000
+187,On the Waterfront,1954,8.1,161K,1h 48m,161000
+188,Hacksaw Ridge,2016,8.1,570K,2h 19m,570000
+189,In the Name of the Father,1993,8.1,183K,2h 13m,183000
+190,Salinui Chueok,2003,8.1,204K,2h 11m,204000
+191,The General,1926,8.1,96K,1h 18m,96000
+192,The Deer Hunter,1978,8.1,353K,3h 3m,353000
+193,Smultronstället,1957,8.1,112K,1h 31m,112000
+194,The Third Man,1949,8.1,178K,1h 44m,178000
+195,Le salaire de la peur,1953,8.2,65K,2h 11m,65000
+196,Relatos salvajes,2014,8.1,210K,2h 2m,210000
+197,Sherlock Jr.,1924,8.2,54K,45m,54000
+198,Dead Poets Society,1989,8.1,524K,2h 8m,524000
+199,Mad Max: Fury Road,2015,8.1,1.1M,2h ,1100000
+200,Mr. Smith Goes to Washington,1939,8.1,119K,2h 9m,119000
+201,"Monsters, Inc.",2001,8.1,952K,1h 32m,952000
+202,Jaws,1975,8.1,642K,2h 4m,642000
+203,How to Train Your Dragon,2010,8.1,777K,1h 38m,777000
+204,Mary and Max.,2009,8.1,183K,1h 32m,183000
+205,Det sjunde inseglet,1957,8.1,194K,1h 36m,194000
+206,Room,2015,8.1,439K,1h 58m,439000
+207,極速傳奇：褔特決戰法拉利,2019,8.1,439K,2h 32m,439000
+208,The Big Lebowski,1998,8.1,840K,1h 57m,840000
+209,Tokyo Story,1953,8.1,66K,2h 16m,66000
+210,Ratatouille,2007,8.1,791K,1h 51m,791000
+211,Rocky,1976,8.1,611K,2h ,611000
+212,Hotel Rwanda,2004,8.1,366K,2h 1m,366000
+213,La passion de Jeanne d'Arc,1928,8.1,59K,1h 50m,59000
+214,Logan,2017,8.1,806K,2h 17m,806000
+215,Spotlight,2015,8.1,490K,2h 9m,490000
+216,Platoon,1986,8.1,429K,2h ,429000
+217,The Terminator,1984,8.1,902K,1h 47m,902000
+218,Jai Bhim,2021,8.8,211K,2h 44m,211000
+219,Before Sunset,2004,8.1,280K,1h 20m,280000
+220,Rush,2013,8.1,501K,2h 3m,501000
+221,Network,1976,8.1,166K,2h 1m,166000
+222,Stand by Me,1986,8.1,428K,1h 29m,428000
+223,The Best Years of Our Lives,1946,8.1,69K,2h 50m,69000
+224,The Exorcist,1973,8.1,436K,2h 2m,436000
+225,La haine,1995,8.1,188K,1h 38m,188000
+226,The Wizard of Oz,1939,8.1,418K,1h 42m,418000
+227,Pirates of the Caribbean: The Curse of the Black Pearl,2003,8.1,1.2M,2h 23m,1200000
+228,Into the Wild,2007,8.1,644K,2h 28m,644000
+229,The Incredibles,2004,8.0,781K,1h 55m,781000
+230,To Be or Not to Be,1942,8.2,41K,1h 39m,41000
+231,Hachi: A Dog's Tale,2009,8.1,302K,1h 33m,302000
+232,Ah-ga-ssi,2016,8.1,164K,2h 25m,164000
+233,Groundhog Day,1993,8.0,664K,1h 41m,664000
+234,The Grapes of Wrath,1940,8.1,98K,2h 9m,98000
+235,La battaglia di Algeri,1966,8.1,64K,2h 1m,64000
+236,Babam ve Oglum,2005,8.2,90K,1h 52m,90000
+237,Amores Perros,2000,8.1,249K,2h 34m,249000
+238,Rebecca,1940,8.1,143K,2h 10m,143000
+239,The Sound of Music,1965,8.1,250K,2h 52m,250000
+240,Cool Hand Luke,1967,8.1,185K,2h 7m,185000
+241,Pather Panchali,1955,8.2,36K,2h 5m,36000
+242,The Iron Giant,1999,8.1,217K,1h 26m,217000
+243,It Happened One Night,1934,8.1,109K,1h 45m,109000
+244,The Help,2011,8.1,481K,2h 26m,481000
+245,The 400 Blows,1959,8.1,125K,1h 39m,125000
+246,Persona,1966,8.1,127K,1h 25m,127000
+247,Life of Brian,1979,8.0,415K,1h 34m,415000
+248,Aladdin,1992,8.0,450K,1h 30m,450000
+249,Dances with Wolves,1990,8.0,282K,3h 1m,282000
