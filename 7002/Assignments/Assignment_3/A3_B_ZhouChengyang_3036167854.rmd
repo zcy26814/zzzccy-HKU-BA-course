@@ -1,0 +1,178 @@
+---
+title: '7002HW2'
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE, fig.width=8, fig.height=4)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(dplyr,ISLR,scorecard,caret,glmnet,tidyverse,rstatix,ggpubr,pROC,nnet,MASS,e1071,stats,factoextra)
+```
+
+
+
+# Q1 - Awards Data
+
+The	data awards.csv contains the number	of awards	earned by	students at	one	high school. 
+We consider	two	predictors:
+• prog: the	type of	program	in which the student is	enrolled (3	categories of	general, academic	or vocational).
+• math:	a	continuous variable	representing students’ scores	on their math	final	exam.
+Use the	following	to load	data and address the questions using Poisson regression.
+awards	<- read.csv('awards.csv')
+awards$prog	<- factor(awards$prog,	levels=c("General","Academic","Vocational"))
+
+## 1. Is mean	roughly	equal	to variance	for	each type	of program?
+
+```{r}
+awards  <- read.csv('awards.csv')
+awards$prog <- factor(awards$prog, levels = c("General","Academic","Vocational"))
+
+dim(awards)
+names(awards)
+str(awards)
+apply(awards, 2, function(x) sum(is.na(x)))
+```
+
+```{r}
+grouped_awards <- awards %>%
+  group_by(prog) %>%
+  summarise(
+    mean_awards = mean(num_awards),
+    variance_awards = var(num_awards)
+  )
+
+grouped_awards
+```
+
+Mean is only roughly equal to variance for “General’ and ‘Vocational’ programmes only.
+
+## 2. Consider model_1 “num_awards ~ math	+	prog”	and	model_2	“num_awards	~	math”. Use “anova(model_2, model_1,	 test=’Chisq’)”	to	test significance	of “prog”.
+
+```{r}
+model_1 <- glm(num_awards~math+prog, family = 'poisson', data = awards)
+summary(model_1)
+```
+
+```{r}
+model_2 <- glm(num_awards~math, family = 'poisson', data = awards)
+summary(model_2)
+```
+
+```{r}
+anova(model_2, model_1, test='Chisq')
+```
+
+P-value is less than 0.05, hence ‘Prog’ is statistically significant.
+
+## 3. How	many more	wards	do we	expect one student to	get	in the “Academic”	program	compared to	the	“General”	program	with a math	score	of 90?
+
+```{r}
+data1.3 = data.frame(math = c(90,90), prog = c('Academic','General'))
+data1.3$pred = predict(model_1, newdata = data1.3, type = 'response')
+data1.3[1,3] - data1.3[2,3]
+```
+
+Hence we expect	one	student	to get 0.984 more wards in the “Academic”	program	compared to	the	“General”	program	with a math	score	of 90.
+
+
+
+# Q2 - Lung Cancer Data
+
+The	data.txt file	is a 12625 x 56	matrix;	each column	(row)	of the matrix corresponds	to the individual	case (gene).
+Among	the	56	cases,	
+Columns	1~20:	pulmonary	carcinoid	samples	(Carcinoid);
+Columns	21~33: colon cancer	metastasis samples (Colon);
+Columns	34~50: normal	lung samples (Normal);
+Columns	51~56: small cell	carcinoma	samples	(SmallCell).
+Before the following analyses, please	first	center each	row	of the data, i.e.	remove the mean	of each	row and	transpose	the matrix.	
+
+## Q2.1 Principal	Component	Analysis
+
+- Apply	PCA	to the transposed	matrix to	extract	the	first	three	principal	components.	
+Be careful with	outliers.
+- Use	the	scree	plot to	explain	whether	these	three	components are sufficient.	
+- Plot pair-wise scatterplots	and	use	the	sample labels	(Carcinoid,	Colon, Normal, SmallCell)	to explain the plots.
+
+```{r}
+lungcancer <- read.table('lungcancer.txt')
+data = data.frame(t(scale(lungcancer)))
+```
+
+```{r}
+pca <- prcomp(data, scale=TRUE)
+pca_ <- pca$x[, (1:3)]
+pca_
+```
+
+```{r}
+library(factoextra)
+fviz_eig(pca, addlabels = TRUE)
+```
+
+These	three	components explain 37.3% variance, which is enough to explain these three components
+
+```{r}
+data$case<-c(rep('Carcinoid',20),rep('Colon',13),rep('Normal',17),rep('SmallCell',6))
+ggplot(data = data, aes(x = pca$x[,1], y = pca$x[,2], color = data$case)) + geom_point()
+```
+
+## Q2.2	Nominal	Logistic Regression, LDA and SVM
+
+Consider the first three principal components	in Q2.1	as predictors, and the sample	labels(Carcinoid,	Colon, Normal, SmallCell)	as the categorical response.	
+- Perform	nominal	logistics	regression,	LDA	and	SVM.
+- Present, compare and discuss the results.
+
+```{r}
+data_2 = data.frame(pca$x[, (1:3)], case = c(rep('Carcinoid',20), rep('Colon',13), rep('Normal',17), rep('SmallCell',6)))
+data_2$case = factor(data_2$case)
+model_log =  multinom(case ~., data = data_2)
+model_lad =  lda(case ~ .,data_2)
+model_svm =  svm(case ~ .,data_2 )
+```
+
+```{r}
+pred1 = predict(model_log)
+sum(pred1 == data_2$case ) / nrow(data_2)
+pred2 = predict(model_lad)
+sum(pred2$class == data_2$case ) / nrow(data_2)
+pred3 = predict(model_svm)
+sum(pred3 == data_2$case ) / nrow(data_2)
+```
+
+According to the result, Nominal logistics regression perform better than LDA and SVM.
+
+## Q2.3 Clustering
+
+Consider the first three principal components in Q2.1 as predictors.
+- Perform	K-means	and	hierarchical clustering	analyses using the first three principal components.
+- Use	the	sample labels	to discuss whether the two analyses are reasonable.	
+
+```{r}
+fit.km = kmeans(data[1:3], 4) 
+data$kmeans =  fit.km$cluster
+fviz_cluster(fit.km, data[1:3])
+```
+
+```{r}
+d = dist(data[1:3])
+fit.c <- hclust(d, method = "average")
+fviz_dend(fit.c, k=4)
+```
+
+The two analyses are not very reasonable. 
+1 to 20, 21 to 33, 34 to 50 and 51 to 56 are not classified into one category. 
+The classification of kmean and hierarchical clustering is very different from the actual results.
+

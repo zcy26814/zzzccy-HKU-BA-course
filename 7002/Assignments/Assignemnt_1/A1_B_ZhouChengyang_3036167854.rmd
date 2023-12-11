@@ -1,0 +1,407 @@
+---
+title: '7002HW1'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+library(dplyr)
+library(ggplot2)
+install.packages("GGally")
+library(GGally)
+library(rstatix)
+install.packages("Metrics")
+library(Metrics)
+```
+
+## Q2 - Production Time Run
+
+ProdTime.dat contains	information	about	20	production	runs	supervised	by	each	of	three	managers.	
+Each	observation	gives	the	time	(in	minutes)	to	complete	the	task,	Time	for	Run,
+as	well	as	the	number	of	units	produced,	Run	Size, and	the	manager	involved,	Manager.	
+
+Which	manager	performs	the	best?
+
+```{r}
+q2 = read.csv("ProdTime.dat")
+q2
+```
+
+```{r}
+dim(q2)
+names(q2)
+str(q2)
+```
+```{r}
+q2$Efficiency <- q2$Time.for.Run / q2$Run.Size
+q2
+```
+
+```{r}
+A <- q2[q2$Manager == 'a', "Efficiency"]
+B <- q2[q2$Manager == 'b', "Efficiency"]
+C <- q2[q2$Manager == 'c', "Efficiency"]
+summary(A)
+summary(B)
+summary(C)
+```
+
+```{r}
+df_A <- data.frame(Value = A)
+df_B <- data.frame(Value = B)
+df_C <- data.frame(Value = C)
+
+combined_df <- rbind(df_A, df_B, df_C)
+combined_df$Dataset <- rep(c("A", "B", "C"), each = nrow(df_A))
+
+ggplot(combined_df, aes(y = Value)) +
+  geom_boxplot() +
+  facet_wrap(~ Dataset, nrow = 1) +
+  xlab("Dataset") + ylab("Value") +
+  ggtitle("Boxplots of Datasets A, B, and C")
+```
+
+```{r}
+t.test(B, A , alternative = "less")
+t.test(B, C , alternative = "less")
+```
+
+As a result:
+According to the above figure and t-test, B Manager performs better than A Manger.
+But B Manager and C Manager do not have significant difference.
+
+
+
+## Q3 - Production Time Run
+
+The	original	data	contains	408	observations	about	cars.	It	has	some	similarity	as	the	data	
+CARS	that	we	used in	our	lectures.	To	get	the	data,	first	install	the	package	ISLR.	The	data	
+Auto	should	be	loaded	automatically.	We	use	this	case	to	go	through	methods	learnt	so	far.	
+You	can	access	the	necessary	data	with	the	following	code:
+
+```{r,	eval	=	F}
+#	check	if	you	have	ISLR	package,	if	not,	install	it
+if(!requireNamespace('ISLR'))	install.packages('ISLR')	
+auto_data	<- ISLR::Auto
+```
+
+Q3.1
+Explore	the	data,	with	particular	focus	on	pairwise	plots	and	summary	statistics.	
+Briefly	summarize	your	findings	and	any	peculiarities	in	the	data.
+
+```{r}
+dim(auto_data)
+names(auto_data)
+str(auto_data)
+sum(is.na(auto_data))
+summary(auto_data)
+```
+
+```{r}
+auto_data %>%
+  select_if(is.numeric) %>%
+  ggpairs(progress =FALSE)
+```
+```{r}
+auto_data %>%
+  select_if(is.numeric)  %>% 
+  cor()
+```
+
+
+```{r}
+ggplot(data = auto_data %>% select_if(is.numeric) %>% cor() %>% reshape2::melt(),
+aes(x = Var1 ,y = Var2, fill = value)) +
+geom_tile(color="white",size=0.1) +
+xlab("") +
+ylab("") +
+guides(fill = guide_legend(data.crdle = "Correlation")) +
+scale_fill_gradient( low = "#56B1F7", high = "#132B43") +
+theme(axis.text.x = element_text(angle = 25, hjust = 1))
+```
+
+Q3.2
+What	effect	does	time	have	on	MPG?
+
+i. Start	with	a	simple	regression	of	mpg	vs.	year	and	report	R's	`summary`	output.	
+Is	year	a	significant	variable	at	the	.05	level?	
+State	what	effect	year	has	on	mpg, if any,according	to	this model.	
+
+ii. Add	horsepower	on	top	of	the	variable	year.	Is	year	still	a	significant	variable	at	the	.05	level?	
+Give	a	precise	interpretation	of	the	year	effect	found	here.	
+Include	diagnostic	plots	with	particular	focus	on	the	model	residuals	and	diagnoses.
+
+iii. The	two	95%	CI's	for	the	coefficient	of	year	differ	among	i)	and	ii).	
+How	would	you	explain	the	difference	to	a	non-statistician?
+
+iv. Do	a	model	with	interaction	by	fitting	`lm(mpg	~	year	*	horsepower)`.	
+Is	the	interaction	effect	significant	at	.05	level?	Explain	the	year	effect	(if	any).	
+
+```{r}
+Q3_2_1 <- lm(mpg~year,auto_data)
+summary(Q3_2_1)
+```
+
+p-value < 0.05, year is a	significant	variable at	the	.05	level.
+When year increases 1 unit, mpg will increase 1.230 units.
+
+```{r}
+Q3_2_2 <- lm(mpg~year+horsepower,auto_data)
+summary(Q3_2_2)
+```
+
+p-value < 0.05, year is a	significant	variable at	the	.05	level.
+When year increases 1 unit, mpg will increase 0.657 units.
+
+```{r}
+Q3_2_4 <- lm(mpg~year*horsepower,auto_data)
+summary(Q3_2_4)
+```
+
+p-value < 0.05, the interaction	effect is a	significant	variable at	the	.05	level.
+
+Q3.3
+Note	that	the	same	variable	can	play	different	roles!	
+Take	a	quick	look	at	the	variable	`cylinders`,	try	to	use	this	variable	in	the	following	analyses	wisely.	
+We	all	agree	that	larger	number	of	cylinder	will	lower	mpg.	
+However,	we	can	interpret	`cylinders`	as	either	a	continuous	(numeric)	variable	or	a	categorical	variable.
+
+i. Fit	a	model,	that	treats	`cylinders`	as	a	continuous/numeric	variable:	`lm(mpg	~	horsepower	+	cylinders,	ISLR::Auto)`.	
+Is	`cylinders`	significant	at	the	0.01	level?	
+What	effect	does	`cylinders`	play	in	this	model?
+
+ii. Fit	a	model	that	treats	`cylinders`	as	a	categorical/factor	variable:		`lm(mpg	~	horsepower	+	as.factor(cylinders),	ISLR::Auto)`.	
+Is	`cylinders`	significant	at	the	.01	level?	
+What	is	the	effect	of	`cylinders`	in	this	model?
+
+iii. What	are	the	fundamental	differences	between	treating	`cylinders`	as	a	numeric	or	a	factor?	
+Use	`anova(fit1,	fit2)`	to	help	gauge	the	effect.	
+Explain	their	difference.
+
+```{r}
+Q3_3_1 <- lm(mpg ~ horsepower + cylinders, ISLR::Auto)
+summary(Q3_3_1)
+```
+
+p-value < 0.01, the cylinders is a significant variable at the 0.01 level.
+When cylinders increases 1 unit, mpg will decrease 1.920 units.
+But we know that cylinders and mpg are positively related, so the model has some problems.
+
+
+
+```{r}
+Q3_3_2 <-lm(mpg ~ horsepower + as.factor(cylinders), ISLR::Auto)
+summary(Q3_3_2)
+```
+
+Only for category 4, p-value < 0.01, the cylinders is a significant variable at the 0.01 level.
+For category 5, 6, 8, the cylinders is not a significant variable at the 0.01 level.
+Cylinder 4 cars have average 6.573 units higher mpg than cylinder 3 cars do.
+
+
+
+```{r}
+anova(Q3_3_1, Q3_3_2)
+```
+
+Based on this ANOVA table, it seems that treating cylinders as a factor variable provides a significantly better model fit compared to treating it as a numeric variable.
+
+The fundamental difference between treating "cylinders" as a numeric or a factor variable lies in the interpretation and representation of the variable. 
+
+The choice between treating "cylinders" as numeric or factor depends on the nature of the variable and the specific requirements of your analysis. 
+If the number of cylinders has inherent numerical meaning, treating it as numeric is appropriate. 
+However, if the cylinder counts represent distinct categories without an ordering pattern, treating it as a factor variable is more appropriate.
+
+
+
+## Q4 - Crime Data
+
+We use the crime data at Florida and California to study the prediction of the number of violent crimes (per population). 
+Use the following code to load data.
+    crime <- read.csv("CrimeData_sub.csv", stringsAsFactors = F, na.strings = c("?"))
+    crime <- na.omit(crime)
+Our goal is to find the factors/variables which relate to violent crime. 
+This variable is included in crime as crime$violentcrimes.perpop.
+
+```{r}
+crime <- read.csv("CrimeData_sub.csv", stringsAsFactors = F, na.strings = c("?"))
+crime <- na.omit(crime)
+crime
+```
+
+
+```{r}
+dim(crime)
+names(crime)
+str(crime)
+sum(is.na(crime))
+summary(crime)
+```
+
+```{r}
+crime[crime==0] <- NA
+sapply(crime, function(x) sum(is.na(x)))
+```
+
+```{r}
+crime$pct.police.drugunits <- NULL
+crime$num.homeless <- NULL
+crime$num.in.shelters <- NULL
+crime$pct.urban <- NULL
+crime$num.urban <- NULL
+crime[is.na(crime)] <- 0
+```
+
+Q4.1
+Divide your data into 80% training and 20% testing. 
+Run the ordinary least square regression with all the variables and with the training data. 
+Get RMSE and R2 for both the training and testing data and see if there is a difference.
+
+
+```{r}
+set.seed(123)  
+split<- sample(c(rep(0, 0.8 * nrow(crime)), rep(1, 0.2 * nrow(crime))))
+train_data <- crime[split == 0, ] 
+test_data <- crime[split == 1, ]
+```
+
+```{r}
+model_train_q4_1 <- lm(train_data$violentcrimes.perpop~., data= train_data)
+summary(model_train_q4_1)
+fitrain <- summary(model_train_q4_1)
+```
+
+```{r}
+model_test_q4_1 = predict(model_train_q4_1,test_data)
+summary(model_test_q4_1)
+```
+
+```{r}
+cat("Training RMSE:", mean(fitrain$residuals^2), "\n")
+cat("Training R-squared:", mean(fitrain$r.squared), "\n")
+cat("Testing RMSE:", RMSE(model_test_q4_1, test_data$violentcrimes.perpop), "\n")
+cat("Testing R-squared:", R2(model_test_q4_1, test_data$violentcrimes.perpop), "\n")
+```
+
+Q4.2
+Use LASSO to choose a reasonable, small model, based on the training data you created. 
+Re-fit an OLS model with the variables obtained. 
+The final model should only include variables with p-values < 0.05. 
+Note: you may choose to use lambda 1se or lambda min to answer the following questions where apply. 
+
+i. What is the model reported by LASSO? 
+Use 5-fold cross-validation to select the tuning parameter. 
+
+ii. What is the model after refitting OLS with the selected variables? 
+What are RMSE and R2 for the training and testing data? Compare them with results in Q4.2.
+
+iii. What is your final model, after excluding high p-value variables? 
+You will need to use model selection method to obtain this final model. 
+Make it clear what criterion/criteria you have used and justify why they are appropriate. 
+
+iv. Try Ridge regression with 5-fold CV to select the tuning parameter. 
+Compare its training and testing RMSE and R2 with the previous models.
+
+
+```{r}
+library(glmnet)
+```
+
+```{r}
+X.train <- model.matrix(violentcrimes.perpop~., data=train_data)
+Y.train <- train_data$violentcrimes.perpop
+```
+
+```{r}
+matrix.crimes <- data.frame(CRIMES = Y.train, X.train)
+```
+
+```{r}
+set.seed(123)
+fit.lasso.cv <- cv.glmnet(X.train, Y.train, alpha=1, nfolds=5,
+                        lambda = 10^seq(-3,0,length=100))
+names(fit.lasso.cv)
+```
+
+```{r}
+coef.min <- coef(fit.lasso.cv, s="lambda.min")
+coef.min <- coef.min[which(coef.min !=0),]
+var.min <- rownames(as.matrix(coef.min))
+var.min[2]='state'
+lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+")))
+lm.input
+```
+
+
+
+```{r}
+fit.min.lm <- lm(lm.input, data=train_data)
+lm.output <- coef(fit.min.lm) 
+model_q4_2_2 = summary(fit.min.lm)
+```
+
+```{r}
+test_q4_2_2 = predict(fit.min.lm,test_data)
+```
+
+```{r}
+cat("Training RMSE:", mean(model_q4_2_2$residuals^2), "\n")
+cat("Training R-squared:", mean(model_q4_2_2$residuals^2), "\n")
+cat("Testing RMSE:", RMSE(test_q4_2_2, test_data$violentcrimes.perpop), "\n")
+cat("Testing R-squared:", R2(test_q4_2_2, test_data$violentcrimes.perpop), "\n")
+```
+
+
+
+```{r}
+my_model = as.data.frame(summary(fit.min.lm)$coefficients)
+var = rownames(my_model[my_model$'Pr(>|t|)'<0.05,])
+lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var, collapse = "+")))
+lm.input
+```
+
+
+
+```{r}
+set.seed(123)
+fit.ridge.cv <- cv.glmnet(X.train, Y.train, alpha = 0, nfolds = 5,
+                        lambda = 10^seq(-3,0,length=100))
+names(fit.ridge.cv)
+```
+
+```{r}
+coef.min <- coef(fit.ridge.cv, s="lambda.min")
+coef.min <- coef.min[which(coef.min !=0),]
+var.min <- rownames(as.matrix(coef.min))
+var.min[2]='state'
+lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+")))
+lm.input
+```
+
+```{r}
+fit.min.lm <- lm(lm.input, data=train_data)
+lm.output <- coef(fit.min.lm) 
+model_q4_2_4 = summary(fit.min.lm)
+```
+
+```{r}
+test_q4_2_4 = predict(fit.min.lm, test_data)
+```
+
+```{r}
+cat("Training RMSE:", mean(model_q4_2_4$residuals^2), "\n")
+cat("Training R-squared:", mean(model_q4_2_4$r.squared), "\n")
+cat("Testing RMSE:", RMSE(test_q4_2_4, test_data$violentcrimes.perpop), "\n")
+cat("Testing R-squared:", R2(test_q4_2_4, test_data$violentcrimes.perpop), "\n")
+```
+

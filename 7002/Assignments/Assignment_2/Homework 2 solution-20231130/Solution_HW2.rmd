@@ -1,0 +1,517 @@
+---
+title: "Solution_HW2"
+author: 'MSBA7002: Business Statistics'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+    number_sections: true
+  rmdformats::readthedown:
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    highlight: tango
+    toc_depth: 4
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: spacelab #yeti #spacelab #simplex #readable #paper #flatly #cosmo #lumen
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    number_sections: true
+abstract: "The homework solutions contain a continued effort from the MSBA7002 TAs and instructors^[We would like to thank Jianlong Shao for providing the first version of the solution and for his great contributions to the class]. You should compare the solutions with your own homework submission to see how you can better improve your analytical skills. Please **do not redistribute the document or put it online** to hurt other students' learning experience."
+---
+<style>
+  p{
+    font-size:16px;
+    line-height:1.5em;
+    text-indent:35px;
+  }
+</style>
+
+\pagebreak
+```{r include = F}
+rm(list = ls())
+pacman::p_load(pROC,caret,dplyr,e1071)
+```
+
+# Q1. Default Data from ISLR
+
+```{r}
+df.default <- ISLR::Default
+df.default <- df.default %>% mutate(default = factor(default, levels = c("No","Yes")))
+str(df.default)
+summary(df.default)
+```
+
+
+\pagebreak
+## 
+\textcolor{blue}{Fit a logistic regression with student as the X variable and default as the response variable. Interpret the coefficients and discuss whether the X variable is significant.} 
+```{r}
+fit1.1 <- glm(default~student,data = df.default, family = binomial(logit)) 
+summary(fit1.1)
+```
+
+The coefficient of X means: the log odds of Y is equal to default will increase 0.4049 if a person is student compared to a person is not student, The interecpt means the log odds of Y given a person is not a student.
+
+Both of estimators are **significant**.
+
+\pagebreak
+
+##
+
+\textcolor{blue}{For the above logistic regression, one can actually obtain explicit expression of the maximum likelihood estimates of the coefficients. Please do the following} 
+
+###
+
+\textcolor{blue}{Write down the logistic regression model by coding student using one dummy variable: 0 for students and 1 for non-students.}
+
+$$
+log(\frac{P(Default=Yes|Student)}{P(Default=No|Student)})=\beta_0 + \beta_1*Student
+$$
+
+
+where
+$$
+Student=
+\left\{\begin{array}{rl}
+                  {0} & \textrm{student} \\
+                  {1} & \textrm{non-student} \\
+                \end{array}
+              \right.
+$$
+
+or
+
+$$
+\begin{aligned}
+P(Default=Yes|Student=1)&=\frac{e^{\beta_0+\beta_1}}{1+e^{\beta_0+\beta_1}}\\
+P(Default=No|Student=1)&=\frac{1}{1+e^{\beta_0+\beta_1}}\\
+P(Default=Yes|Student=0)&=\frac{e^{\beta_0}}{1+e^{\beta_0}}\\
+P(Default=No|Student=0)&=\frac{1}{1+e^{\beta_0}}
+\end{aligned}
+$$
+
+\pagebreak
+
+###
+
+\textcolor{blue}{Write down the corresponding likelihood function.}
+
+$$
+\begin{aligned}
+L(\beta_0,\beta_1|\textrm{Default},\textrm{Student})=&(\frac{e^{\beta_0+\beta_1}}{1+e^{\beta_0+\beta_1}})^{n(Default=Yes,Student=1)}
+\times(\frac{1}{1+e^{\beta_0+\beta_1}})^{n(Default=No,Student=1)}\\
+&\times(\frac{e^{\beta_0}}{1+e^{\beta_0}})^{n(Default=Yes,Student=0)}
+\times(\frac{1}{1+e^{\beta_0}})^{n(Default=Yes,Student=0)}
+\end{aligned}
+$$
+
+or
+
+$$
+\begin{aligned}
+log(\frac{p_i}{1-p_i})&=\beta_0+\beta_1Student_i \\
+L(\beta_0,\beta_1|\textrm{Default},\textrm{Student})&=\prod_{i=1}^n p_i^{Default_i}(1-p_i)^{1-Default_i}\\
+&=e^{\sum_{i=1}^n[Default_i(\beta_0+\beta_1Student_i)-log(1+e^{\beta_0+\beta_1Student_i})]}\\
+l(\beta_0,\beta_1|\textrm{Default},\textrm{Student})&=\sum_i^n[Default_i(\beta_0+\beta_1Student_i)-log(1+e^{\beta_0+\beta_1Student_i})]
+\end{aligned}
+$$
+
+where
+
+$$
+Default=
+\left\{\begin{array}{rl}
+                  {1} & \textrm{Yes} \\
+                  {0} & \textrm{No} \\
+                \end{array}
+              \right.
+$$
+
+$$
+Student=
+\left\{\begin{array}{rl}
+                  {0} & \textrm{student} \\
+                  {1} & \textrm{non-student} \\
+                \end{array}
+              \right.
+$$
+
+\pagebreak
+
+###
+
+\textcolor{blue}{Obtain expressions for the coefficient estimates, and compare them with the answers in Q1.1.}
+
+We first define $n_d = \sum_i Default_i$, $n_s = \sum_i Student_i$ and $n_{ds} = \sum_i Default_i * Student_i$ as the total number of defaults, total number of students and total number of students with default $=$ Yes. With these definations, we rewrite the log-likelihood as
+$$
+\begin{aligned}
+l(\beta_0,\beta_1|\textrm{Default},\textrm{Student})&=\sum_i^n[Default_i(\beta_0+\beta_1Student_i)-\log(1+e^{\beta_0+\beta_1Student_i})] \\
+&=n_d \beta_0 + n_{ds} \beta_1 - n_s \log(1+e^{\beta_0 + \beta_1}) - (n-n_s) \log(1+e^{\beta_0}) 
+\end{aligned}
+$$
+
+In order to maximize the log-likelihood presented above, we take derivative with respect to $\beta_0$ and $\beta_1$. So the following two equations need to be satisfied.
+$$
+\begin{aligned}
+n_d - n_s \frac{1}{1+e^{-(\beta_0+\beta_1)}} - (n-n_s) \frac{1}{1+e^{-\beta_0}} & = 0\\
+n_{ds} - n_s \frac{1}{1+e^{-(\beta_0+\beta_1)}} &=0
+\end{aligned}
+$$
+Solving the equations, we get our MLE for $\hat\beta_0$ and $\hat\beta_1$
+
+$$
+\begin{aligned}
+\hat\beta_0 & = -\log(\frac{n-n_s}{n_d - n_{ds}} - 1)\\
+\hat\beta_1 &= -\log(\frac{n_s}{n_{ds}} - 1) -\hat\beta_0
+\end{aligned}
+$$
+
+
+```{r}
+n <- nrow(df.default)
+n_d <- sum(df.default$default == "Yes")
+n_s <- sum(df.default$student == "Yes")
+n_ds <- sum((df.default$student == "Yes") & (df.default$default == "Yes"))
+
+beta0 <- -log((n - n_s)/(n_d - n_ds) - 1)
+beta1 <- -log(n_s / n_ds - 1) - beta0
+c(beta0, beta1)
+```
+
+The computation matches exactly with R output.
+
+
+
+\pagebreak
+##
+
+###
+
+\textcolor{blue}{Consider all the variables and obtain the final logistic regression model.}
+
+```{r}
+fit1.3 <- glm(default~., data=df.default, family = binomial)
+summary(fit1.3)
+```
+
+\pagebreak
+
+###
+
+\textcolor{blue}{Compare the ROC curves for the model in Q1.1 and Q1.3, along with the corresponding AUC.} 
+
+```{r echo = T}
+roc_1.1 <- roc(df.default$default,fit1.1$fitted.values)
+plot(roc_1.1, print.auc=TRUE, auc.polygon=TRUE, grid=c(0.1, 0.2),
+     grid.col=c("green", "red"), max.auc.polygon=TRUE,
+     auc.polygon.col="skyblue", print.thres=TRUE, main = 'ROC Curves in Q1.1',
+     control = FALSE, case = TRUE)
+```
+
+\pagebreak
+
+```{r echo = T}
+roc_1.3 <- roc(df.default$default,fit1.3$fitted.values)
+plot(roc_1.3, print.auc=TRUE, auc.polygon=TRUE, grid=c(0.1, 0.2),
+     grid.col=c("green", "red"), max.auc.polygon=TRUE,
+     auc.polygon.col="skyblue", print.thres=TRUE,main='ROC Curves in Q1.3')
+
+```
+
+We find the AUC of ROC in Q1.3 is much larger than that in Q1.1.
+
+Note: although AUC in Q1.3 is much larger than that in Q1.1, we could not conclude logistic model in Q1.3 is better than that in Q1.1, since this auc is related to training dataset, it reflects over-fitting situation.
+
+\pagebreak
+
+###
+
+\textcolor{blue}{Consider a threshold of 0.5 on the probability of default. Calculate the corresponding `specificity`, `sensitivity`, `false positive rate`, `true positive rate`.}   
+
+```{r}
+fitted.default <- factor(ifelse(fit1.3$fitted.values>0.5,'Yes','No'))
+t.def <- table(fitted.default,df.default$default)
+t.def
+```
+
+
+$$
+\begin{aligned}
+Sensitivity&=Prob(\widehat{default}=Yes|default=Yes)\\
+&=\frac{105}{105+228}=31.53\% \\
+Specificity&=Prob(\widehat{default}=No|default=No)\\
+&=\frac{9627}{9627+40}=99.59\% \\
+\textrm{False Positive rate}&=Prob(\widehat{default}=Yes|default=No) \\
+&=\frac{40}{9627+40}=0.4138\%\\
+\textrm{True Positive rate}&=Prob(\widehat{default}=Yes|default=Yes) \\
+&=\frac{105}{105+228}=31.53\%
+\end{aligned}
+$$
+
+\pagebreak
+
+or
+
+```{r}
+fitted.default <- factor(ifelse(fit1.3$fitted.values>0.5,'Yes','No'))
+confusionMatrix(fitted.default,df.default$default,positive = "Yes")
+```
+
+$$
+\begin{aligned}
+\textrm{False Positive rate}&=Prob(\widehat{default}=Yes|default=No) \\
+&=\frac{40}{9627+40}=0.4138\%\\
+\textrm{True Positive rate}&=Prob(\widehat{default}=Yes|default=Yes) \\
+&=\frac{105}{105+228}=31.53\%
+\end{aligned}
+$$
+
+\pagebreak
+
+# Q2. Lost Sales
+
+## A quick EDA
+
+```{r}
+df.lost<-read.csv("lostsales.txt")
+df.lost <- df.lost %>% mutate(Part.Type = factor(Part.Type),
+                      Status = factor(Status))
+str(df.lost)
+```
+
+```{r}
+sum(is.na(df.lost))
+```
+
+```{r}
+df.lost%>%
+  GGally::ggpairs(progress=FALSE,lower=list(combo=GGally::wrap("facethist", binwidth=1)))
+```
+
+\pagebreak
+
+## Variable Selection
+
+We build a model with both independent variables.
+
+```{r}
+fit.lost1 <- glm(Status~.,data=df.lost,family=binomial(logit))
+summary(fit.lost1)
+```
+
+\pagebreak
+
+The p-value of `quote` seems insignificant, so let’s build a model without it
+
+```{r}
+fit.lost2 <- glm(Status~.,data=df.lost[,-c(1)],family=binomial(logit))
+summary(fit.lost2)
+```
+
+We use Type I anova to test whether `Quote` is significant.
+
+```{r echo = T}
+anova(fit.lost1, fit.lost2, test="Chisq")
+```
+
+We don’t have evidence to reject the null at 0.05, the shorter model is adopted.
+
+\pagebreak
+
+```{r echo = T}
+roc.lost <- roc(df.lost$Status,fit.lost2$fitted.values)
+plot(roc.lost, print.auc=TRUE, auc.polygon=TRUE, grid=c(0.1, 0.2),
+     grid.col=c("green", "red"), max.auc.polygon=TRUE,
+     auc.polygon.col="skyblue", print.thres=TRUE,main='ROC Curves in Q2')
+```
+
+The data provide some useful information based on the two reasons below:
+
+\begin{itemize}
+\item Residual deviance is smaller than Null deviance.
+\item AUC is larger than 0.5
+\end{itemize}
+
+**Analysis**
+\begin{itemize}
+\item Given `Part Type` is the same, a small quoted number of calendar days within which the order is to be delivered increases a customer will place an order.
+\item Given `Time to Delivery` is the same, quotes with original equipment are less likely to make customers place orders than that with aftermarket.
+\end{itemize}
+
+
+\pagebreak
+# Q3. Wine Quality
+
+```{r}
+df.wine <-read.csv("winequality-bc.txt")
+str(df.wine)
+sum(is.na(df.wine))
+```
+
+After carefully checking, we find 
+\begin{itemize}
+\item `quality` contain duplicative information as `Quality`.
+\item `Crossvalidation` and `Hold.Test` are the index of cross validation and testing data. 
+\end{itemize}
+
+All these three variables mentioned above are irrelevant to our analysis, so we delete them.
+
+```{r}
+df.wine <- df.wine[,-c(14,15,16)]
+```
+
+\pagebreak
+
+## EDA
+
+You could put some Pairplot and Boxplot Here. I list some pictures here.
+
+Pairplot for numeric variables plotted by using `corrplot()` in `corrplot` package.
+
+```{r echo = T}
+corrplot::corrplot(cor(df.wine[,-c(1,13,14,15,16)]))
+```
+
+\pagebreak
+
+Somp boxplot plotted by `ggplot` package
+
+```{r echo = T, fig.width=6, fig.height=3.5}
+ggplot(df.wine, aes(x = Quality, y = density)) +
+  geom_boxplot()
+```
+
+```{r echo = T, fig.width=6, fig.height=3.5}
+ggplot(df.wine, aes(x = Quality, y = volatile.acidity)) +
+  geom_boxplot()
+```
+
+\pagebreak
+
+## Model Building
+
+You could adopt either multinomial Logistic Regression or Ordinal Logistic Regression in this question.
+
+For both model, two kinds of variable selection are recommended.
+
+\begin{itemize}
+\item We use **cross-validation** and compare **the average testing auc** or **the average testing accuracy** of different models.
+\item We use Type II ANOVA to do varaiable selection
+\end{itemize}
+
+Here I use Type II ANOVA to do varaiable selection.
+
+(Open Question: the answer will be different based on different criterizon used)
+
+### Multinominal Logistic Regression
+
+```{r include = T}
+pacman::p_load(nnet,MASS,car)
+```
+
+```{r include = T}
+fit.wine.mult1 <- multinom(Quality~.,df.wine,family=binomial)
+summary(fit.wine.mult1)
+```
+
+```{r include = T}
+Anova(fit.wine.mult1)
+```
+
+Anova shows that "citric.acid" and "total.sulfur.dioxide" are insignificant once other variables are included. Let us remove them and rebuild the model.
+
+\pagebreak
+```{r}
+# removing "citric.acid" and "total.sulfur.dioxide
+fit.wine.mult2 <- multinom(Quality~.,df.wine[,-c(4,8)],family=binomial)
+summary(fit.wine.mult2)
+```
+
+We use Type II anova again and the result shows that every variable is significant. We stop here.
+
+\pagebreak
+By summarizing the model output, a good wine has below characteristics:
+
+\begin{itemize}
+\item Good wine should have modest `fixed.acidity`.
+\item Good wine should have low `volatile.acidity`.
+\item Good wine should have high `residual.sugar`
+\item Good wine should have low `chlorides`.
+\item Good wine should have high `free.sulfur.dioxide`.
+\item Good wine should have modest `density`.
+\item Good wine should have modest `PH`.
+\item Good wine should have high `sulphates`
+\item Good wine should have high `alcohol`.
+\item Good wine should tend not to be `colorwhite`.
+\end{itemize}
+
+Here we say a feature is "modest" if the coefficients for the class "Just OK" and the class "Good" have different signs.
+
+\pagebreak
+### Ordinal Logistic Regression
+
+Let us try to fit the proportional odds logistic regression model.
+
+```{r}
+df.wine %>% str()
+```
+
+```{r}
+df.wine <- df.wine %>% mutate(color=factor(color),
+                              Quality=factor(Quality,level=c('Bad','Just OK','Good'),order=T))
+```
+
+```{r include = F}
+fit.wine.polr1 <- polr(Quality~.,df.wine)
+summary(fit.wine.polr1)
+```
+
+```{r include = F}
+car::Anova(fit.wine.polr1)
+```
+
+Similar to the multinomial logistic regression, we find "citric.acid" and "total.sulfur.dioxide" are insignificant after Type II ANOVA.
+
+```{r}
+# removing "citric.acid" and "total.sulfur.dioxide
+fit.wine.polr <- polr(Quality~., data=df.wine[,-c(4,8)])
+summary(fit.wine.polr)
+```
+
+```{r include = F}
+Anova(fit.wine.polr)
+```
+
+\pagebreak
+By summarizing the model output, a good wine has below characteristics:
+
+\begin{itemize}
+\item Good wine should have high `fixed.acidity`.
+\item Good wine should have low `volatile.acidity`
+\item Good wine should have high `residual.sugar`
+\item Good wine should have low `chlorides`.
+\item Good wine should have high `free.sulfur.dioxide`.
+\item Good wine should have low `density`.
+\item Good wine should have high `PH`.
+\item Good wine should have high `sulphates`
+\item Good wine should have high `alcohol`.
+\item Good wine should tend not to be `colorwhite`.
+\end{itemize}
+
+As in proportional odds logistic regression, different levels of ordinal categories share the same coefficients (except intercept), here we only conclude high or low, depending on the coefficient signs. But largely speaking, the conclusions are more or less the same. 
+
+Note that the coefficients given by `polr` is negative of the beta coefficients used in class. So from the above `polr` output, for example, `volatile.acidity` has a negative coefficient $-3.97$. This means 
+$$
+\log(\pi_{bad}/(\pi_{ok}+\pi_{good})) = \beta_{01} + ... {\bf + 3.97} x_{volatile.acidity} + ... ,
+$$
+$$
+\log((\pi_{bad}+\pi_{ok})/\pi_{good}) = \beta_{02} + ... {\bf + 3.97} x_{volatile.acidity} + ...,
+$$
+both of which means an increase in `volatile.acidity` will lead to an increase in $\pi_{bad}$ and $\pi_{bad}+\pi_{ok}$. More specifically, one unit increase in `volatile.acidity` gives odds ratio of $e^{3.97}$, or leads to an increase in the odds of $\pi_{bad}/(\pi_{ok}+\pi_{good})$ and $(\pi_{bad}+\pi_{ok})/\pi_{good}$ by a multiplicative factor of $e^{3.97}$. Since both $\pi_{bad}$ and $\pi_{bad}+\pi_{ok}$ increases as `volatile.acidity` increases, good wine should have low `volatile.acidity`.
+
+

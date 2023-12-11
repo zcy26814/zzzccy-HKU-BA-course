@@ -1,0 +1,285 @@
+---
+title: '7002HW2'
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE, fig.width=8, fig.height=4)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(dplyr,ISLR,scorecard,caret,glmnet,tidyverse,rstatix,ggpubr,pROC,nnet,MASS)
+```
+
+
+
+# Q1 - Default Data from ISLR
+
+## Q1.1
+Fit a logistic regression	with student as	the	X	variable and default as	the	response variable.	
+Interpret	the	coefficients and discuss whether	the	X	variable is significant.
+
+```{r}
+Q1.1	<- ISLR::Default
+dim(Q1.1)
+names(Q1.1)
+str(Q1.1)
+```
+
+```{r}
+mutate(Q1.1, student=as.factor(student),
+             default=as.factor(default))
+fit1.1 <- glm(default~student, Q1.1, family=binomial(logit)) 
+summary(fit1.1)
+```
+
+$$
+\beta_0 = 3.504, \beta_1 = 0.405
+$$
+$$
+P(default=Yes\vert student) = \frac{e^{-3.504 + 0.405}}{1+e^{-3.504 + 0.405}}
+$$
+
+Because p-value is 0.0004 < 0.05, student is a significant variable in this case.
+
+## Q1.2
+For	the	above	logistic regression, one can actually	obtain explicit	expression of	the	maximum	likelihood estimates of the coefficients.	
+Please do	the	following:
+
+### i
+Write	down the logistic regression model by coding student using one dummy variable: 0 for students	and	1 for	non-students.
+
+$$
+log(\frac{P(default=Yes\vert X)}{1-P(default=Yes\vert X)}) = \beta_0+\beta_1*I_{x=studentNo}+\epsilon
+$$
+
+### ii
+Write	down the corresponding likelihood	function.
+
+$$
+P(default=Yes\vert Nostudent) = \frac{e^{\beta_0+\beta_1studentNo}}{1+e^{\beta_0+\beta_1studentNo}}\\
+P(default=Yes\vert student) = \frac{e^{\beta_0}}{1+e^{\beta_0}}\\
+L(\beta_0,\beta_1)=\\(\frac{e^{\beta_0+\beta_1}}{1+e^{\beta_0+\beta_1}})^{n_{(Default=1|NoStudent =1)}}*(\frac{1}{1+e^{\beta_0+\beta_1}})^{n_{(Default=0|NoStudent =1)}}*(\frac{e^{\beta_0}}{1+e^{\beta_0}})^{n_{(Default=1|NoStudent =0)}}*(\frac{1}{1+e^{\beta_0}})^{n_{(Default=0|NoStudent =0)}}\\
+$$
+
+### iii
+Obtain expressions for the coefficient estimates, and compare	them with the	answers	in Q1.1.
+
+```{r}
+Q1.2 <- Q1.1
+for (i in 1:nrow(Q1.2))
+{
+  if (Q1.2[i,2]=="Yes")
+  {
+    Q1.2[i,5] <- 0
+  }
+  else
+  {
+    Q1.2[i,5] <- 1
+  }
+}
+colnames(Q1.2)[5] <- "studentNo"
+```
+
+```{r}
+fit1.2 <- glm(Q1.2$default ~ Q1.2$studentNo, family = binomial(logit))
+summary(fit1.2)
+```
+
+It is different from the answers in Q1.1.
+Because in Q1.1, 1 for students	and	0 for	non-students. In Q1.2, 0 for students	and	1 for	non-students.
+
+## Q1.3
+
+### i
+Consider all the variables and obtain	the	final logistic regression	model.
+
+```{r}
+fit1.3 <- glm(default~., Q1.1, family=binomial(logit)) 
+summary(fit1.3)
+```
+
+### ii
+Compare	the	ROC	curves for the model in Q1.1 and Q1.3, along with the	corresponding	AUC.	
+
+```{r}
+pred_q1.1<-predict(fit1.1, newdata = Q1.1, type = "response")
+Q1.1$pred1<-fit1.1$fitted.values
+
+pred_q1.3<-predict(fit1.3, newdata = Q1.1, type = "response")
+Q1.1$pred3<-fit1.3$fitted.values
+
+roc_q1.1 <- roc(Q1.1$default,Q1.1$pred1, ci=T,auc = T)
+roc_q1.3 <- roc(Q1.1$default,Q1.1$pred3, ci=T,auc = T)
+
+
+plot(roc_q1.1, col = "blue", main = "ROC Curves Comparison", xlab = "False Positive Rate", ylab = "True Positive Rate")
+plot(roc_q1.3, col = "red", add = TRUE)
+```
+
+```{r}
+auc_q1.1 <- auc(roc_q1.1)
+auc_q1.3 <- auc(roc_q1.3)
+cat("AUC for Q1.1:", auc_q1.1, "\n")
+cat("AUC for Q1.3:", auc_q1.3, "\n")
+```
+
+### iii
+Consider a threshold of	0.5	on the probability of	default. 
+Calculate	the	corresponding	specificity, sensitivity,	false	positive rate, true positive rate.			
+
+```{r}
+paste('specificity',length(Q1.1[Q1.1$default=='No'&Q1.1$pred3<0.5,1])/length(Q1.1[Q1.1$default=='No',1]))
+paste('sensitivity or true positive rate', length(Q1.1[Q1.1$default=='Yes'&Q1.1$pred3>0.5,1])/length(Q1.1[Q1.1$default=='Yes',1]))
+paste('false positive rate',length(Q1.1[Q1.1$default=='No'&Q1.1$pred3>0.5,1])/length(Q1.1[Q1.1$default=='No',1]))
+```
+
+
+
+# Q2 - Lost Sales
+
+In many	industries throughout	the	world, suppliers compete for business	by submitting	quotes for work, services	or products.	
+A	key	criterion	used to	determine	the	winning	quote	is the dollar	amount of	the	quote, but other factors include expected	quality, estimated delivery	time of	the	product, or	quoted completion	time of the	work.	
+
+The	focus	of this	case is	a	supplier of	equipment	to the automotive	industry.	
+The	products of	interest in	this case	are	various	precision	metal	components used	in a range of	automotive applications, such	as braking systems,	drive	trains,	and	engines.	
+Some of	the	products will	be used	in the manufacture or assembly of	new	automobiles	(i.e.	original equipment), while others	will be	used as	replacement	parts	in automobiles already on the road(i.e. aftermarket).	
+
+The	supplier wants to	increase sales and expand	its	market position.	
+Many of	the	quotes provided	to prospective customers in	the	past haven’t resulted	in orders.	
+Do the data	provide	any	indication why?	
+Are	there	certain	situations that	make it	more or	less likely that a customer	will place an	order?	
+
+Please fit a model using the available data	to explore these questions. 
+Based	on the fitted	model, please	provide	your answers to the	above	questions.	
+Drop insignificant variables for variable	selection	if you like.
+
+The	data set contains	550	records	for	quotes provided	over a six month period.	
+The	variables	in the data	set	are:	
+Quote: The quoted price, in dollars, for the order
+Time to Delivery: The quoted number of calendar days within which the order is to be delivered
+Part Type: OE = original equipment; AM = aftermarket
+Status: Whether the quote resulted in a subsequent order within 30 days of receiving the quote: Lost = the order was not placed; Won = the order was placed.
+
+```{r}
+Q2	<- read.csv('lostsales.txt')
+dim(Q2)
+names(Q2)
+str(Q2)
+apply(Q2, 2, function(x) sum(is.na(x)))
+```
+
+```{r}
+Q2$Part.Type <- as.factor(Q2$Part.Type)
+Q2$Status <- as.factor(Q2$Status)
+```
+
+```{r}
+#fit all variables
+fit2 <- glm(Status~., data = Q2, family = "binomial")
+summary(fit2)
+```
+
+The p-values of both Time.to.Delivery and Part.Type are less then 0.05, hence they are significant variables.
+The p-value of Quote is 0.5299 > 0.05, hence Quote is not a significant variable.
+
+```{r}
+fit2.1 <- glm(Status~Time.to.Delivery+Part.Type, Q2, family=binomial(logit)) 
+summary(fit2.1)
+```
+
+```{r}
+roc_q2 <- roc(Q2$Status,fit2.1$fitted.values)
+plot(roc_q2, main = "ROC Curve", col = "red", lwd = 2)
+```
+
+```{r}
+auc_q2 <- auc(roc_q2)
+cat("AUC for Q2:", auc_q2, "\n")
+```
+
+According to the data above, Time.to.Delivery is a very significant variable.
+Holding that Part.Type is constant, if the supplier want to increase sales, he needs to shorten the delivery time.
+AUC-value is 0.638, suggesting that the model has a moderate ability to distinguish between won and lost orders.
+
+
+
+# Q3 - Wine Quality
+
+The	wine quality data contain	information	on quality ratings for 6,497 different wines,	along	with measures	of wine	properties.
+The	response variable is Quality.	
+Please build a model to predict wine	quality.
+Conduct	exploratory	data analysis	and	see	if there are redundant or	irrelevant information in	the	data.	
+If so, remove	them.	
+Then consider	two	possible modelling choices:
+i. Multinomial logistic	regression
+ii. Ordinal	logistic regression
+Write	up a summary about characteristics of	Good quality wine for	each model. 
+Do you roughly get similar conclusions using those two models?	 	
+
+```{r}
+Q3 <-read.csv('winequality-bc.txt')
+dim(Q3)
+names(Q3)
+str(Q3)
+apply(Q3, 2, function(x) sum(is.na(x)))
+```
+
+```{r}
+Q3$Quality <- as.factor(Q3$Quality)
+Q3$color <- as.factor(Q3$color)
+Q3$Hold.Test <- as.factor(Q3$Hold.Test)
+Q3$Crossvalidation <- as.factor(Q3$Crossvalidation)
+```
+
+```{r}
+q3_mult <- multinom(Quality~., data=Q3)
+Anova(q3_mult)
+```
+
+According to the p-values, only quality is a significant variable.
+
+```{r}
+q3_mult2 <- multinom(Quality~fixed.acidity+volatile.acidity+residual.sugar+chlorides+free.sulfur.dioxide+density+pH+sulphates+alcohol+color+Crossvalidation+Hold.Test, data=Q3)
+Anova(q3_mult2)
+```
+
+Choosing those p-values < 0.05:
+fixed.acidity + volatile.acidity + residual.sugar + chlorides + free.sulfur.dioxide + density + pH + sulphates + alcohol + color + Hold.Test
+These variables above are significant.
+
+```{r}
+q3_mult_final <- polr(Quality~fixed.acidity +volatile.acidity+ residual.sugar+chlorides+free.sulfur.dioxide+density+pH+sulphates+alcohol+color+Hold.Test,data=Q3)
+summary(q3_mult_final)
+```
+
+```{r}
+Q3$Quality <- factor(Q3$Quality,levels = c("Bad","Just OK","Good"),ordered = TRUE)
+
+q3_ord <- polr(Quality~fixed.acidity +volatile.acidity+citric.acid+ residual.sugar+chlorides+free.sulfur.dioxide+total.sulfur.dioxide+density+pH+sulphates+alcohol+color+Crossvalidation+Hold.Test,data=Q3)
+Anova(q3_ord)
+```
+
+Choosing those p-values < 0.05:
+fixed.acidity + volatile.acidity + residual.sugar + chlorides + free.sulfur.dioxide + density + pH + sulphates + alcohol + color
+These variables above are significant.
+
+```{r}
+q3_ord_final <- polr(Quality~fixed.acidity +volatile.acidity+ residual.sugar+chlorides+free.sulfur.dioxide+density+pH+sulphates+alcohol+color,data=Q3)
+summary(q3_ord_final)
+```
+
+Summary:
+Both i.Multinomial logistic	regression and ii.Ordinal	logistic regression get similar conclusions.
+Their significant variables are almost the same.

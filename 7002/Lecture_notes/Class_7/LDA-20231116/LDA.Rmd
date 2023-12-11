@@ -1,0 +1,540 @@
+---
+title: 'Linear Discriminant Analaysis (LDA)'
+author: 'MSBA7002: Business Statistics'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=6, fig.height=4)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(ggplot2,dplyr, DiscriMiner, caret, pROC, MASS, e1071)
+```
+
+## Case Study I: Riding Mowers
+
+A riding-mower manufacturer would like to find a way of classifying families in a city into those likely to purchase a riding mower and those not likely to buy one. A pilot random sample is undertaken of 12 owners and 12 nonowners in the city.
+
+```{r}
+mower <- read.csv('RidingMowers.csv')
+```
+
+```{r}
+str(mower)
+names(mower)
+summary(mower)
+```
+
+Change `Ownership` to factor
+
+```{r}
+mower$Ownership <- factor(mower$Ownership)
+```
+
+### EDA
+
+Make a scatter plot for this dataset. 
+
+We can think of a linear classification rule as a line that separates the two-dimensional region into two parts, with most of the owners in one half-plane and most nonowners in the complementary half-plane.
+
+```{r}
+  ggplot(mower) +
+  geom_point(aes(x = Income, y = Lot_Size, col = Ownership), size = 3.5) +
+  xlab("Income($000s)") + 
+  ylab("Lot Size(000s sqft)")
+```
+
+### LDA
+
+#### Classfication Function
+We use `DiscriMiner` to do LDA, which gives us Linear Discriminant Analysis function. 
+
+It will output the LDA model with classification error rate, confusion table. 
+```{r}
+da.reg1 <- linDA(mower[,1:2], mower[,3])
+#da.reg1 <- linDA(mower[,1:2], mower[,3],prior = c(1/2,1/2))
+```
+
+```{r}
+names(da.reg1)
+```
+
+```{r}
+da.reg1$functions
+```
+
+To classify a family into the class of owners or nonowners, we use the classification functions to compute the family's classification scores.
+
+A family is classified into the class of owners if the owner function score is higher than the nonowner function score, and into nonowners if the reverse is the case.
+
+$$
+\begin{aligned}
+\hat{\delta}(Nonnower|Income,Lot\_Size) & = -51.42+0.3294*Income+4.682*Lot\_Size\\
+\hat{\delta}(Owner|Income,Lot\_Size) & = -73.16+0.4296*Income+5.467*Lot\_Size
+\end{aligned}
+$$
+
+An alternative way for classifying a record into one of the classes is to compute the probability of belonging to each of the classes and assigning the record to the most likely class.
+
+$$
+\begin{aligned}
+P(Nonowner|Income,Lot\_Size)&=\frac{\exp\{\hat{\delta}(Nonowner|Income,Lot\_Size)\}}
+{\exp\{\hat{\delta}(Owner|Income,Lot\_Size)\}+\exp\{\hat{\delta}(Nonowener|Income,Lot\_Size)\}}\\
+P(Owner|Income,Lot\_Size)&=\frac{\exp\{\hat{\delta}(Owner|Income,Lot\_Size)\}}
+{\exp\{\hat{\delta}(Owner|Income,Lot\_Size)\}+\exp\{\hat{\delta}(Nonowener|Income,Lot\_Size)\}}
+\end{aligned}
+$$
+
+```{r}
+propensity.owner <- exp(da.reg1$scores[,2])/(exp(da.reg1$scores[,1])+exp(da.reg1$scores[,2]))
+output1 <- data.frame(Actual=mower$Ownership,
+           Pred=da.reg1$classification, 
+           da.reg1$scores, 
+           propensity.owner=propensity.owner)
+output1
+```
+
+#### Classification Boundary
+
+We could also caculate the classification boundary.
+
+$$
+\begin{aligned}
+\hat{\delta}(Nonowner|Income,Lot\_Size)&=\hat{\delta}(Owner|Income,Lot\_Size)\\
+-51.42+0.3294*Income+4.682*Lot\_Size&=  -73.16+0.4296*Income+5.467*Lot\_Size \\
+0.1002*Income+0.785*Lot\_Size &= 21.74\\
+Lot\_Size &= 27.69 - 0.1276*Income
+\end{aligned}
+$$
+
+```{r}
+ggplot(mower) +
+  geom_point(aes(x = Income, y = Lot_Size, col = Ownership), size = 3.5) +
+  geom_abline(intercept = 27.69, slope = -0.1276, color = 'orange', linetype= 'dashed', size = 1.2) + 
+  xlab("Income($000s)") + 
+  ylab("Lot Size(000s sqft)")
+```
+
+#### Prediction
+
+We use `classify` to do a prediction. For instance, the first household has an income of $60K and a lot size of 18.4K $ft^2$.
+
+```{r}
+newmower <- mower[1,]
+newmower[1] <- 60
+newmower[2] <- 18.4
+newmower[3] <- 'NA'
+newmower
+```
+
+```{r}
+pred1 <- classify(da.reg1,as.vector(newmower[1:2]))
+pred1
+```
+
+$$
+\begin{aligned}
+\hat{\delta}(Nonowner|Income,Lot\_Size) & = -51.42+0.3294*60+4.682*18.4=54.48\\
+\hat{\delta}(Owner|Income,Lot\_Size) & = -73.16+0.4296*60+5.467*18.4=53.20
+\end{aligned}
+$$
+Below we discussion some concepts related to classification. 
+
+### a. Sensitivity
+
+$$Prob(\hat Y = 1 \vert Y=1)$$
+
+Not an error. This is also called `True Positive Rate`: the proportion of corrected positive classification given the status being positive.
+
+
+### b. Specificity
+
+$$Prob(\hat Y = 0| Y=0)$$
+
+`Specificity`: the proportion of corrected negative classification given the status being negative.
+
+### c. False Positive 
+
+$$1 - Specificity = P(\hat Y=1 \vert Y=0)$$
+
+`False Positive`: the proportion of wrong classifications among given the status being negative. 
+
+### d. Misclassification error
+
+Mean value of missclassifications:
+
+$$MCE= \frac{1}{n} \sum \{\hat y_i \neq y_i\}.$$
+
+We can get all these quantities through confusion matrix or directly find the misclassification errors.
+
+
+### e. Confusion Matrix
+
+We could use `table` to to create a 2 by 2 table which summarizes the number of mis/agreed labels.
+
+```{r}
+table(mower$Ownership, da.reg1$classification)
+```
+
+We could use `$confusion` to get the confusion matrix.
+
+```{r}
+da.reg1$confusion
+```
+
+We could also use `confusionMatrix` function from `caret` packages to summarize the number of mis/agreed labels.
+
+```{r}
+da.reg1$classification
+```
+
+
+```{r}
+confusionMatrix(da.reg1$classification, mower$Ownership, positive = 'Owner')
+# first argument is prediction and the second one is reference
+```
+
+### f. The Roc Curve and AUC
+
+For each model or process, given a threshold, or a classifier, there will be a pair of sensitivity and specificity. 
+
+By changing the threshold, we graph all the pairs of False Positive as x-axis and True Positive as y-axis to have a curve: the ROC curve.
+
+We use the `roc` function from the package `pROC`. 
+
+Notice that the ROC curve here is Sensitivity vs Specificity. Most of the ROC is drawn using False Positive rate as x-axis.
+
+```{r}
+fit.roc1 <- roc(mower$Ownership, output1$propensity.owner, plot = T, col = 'blue')
+```
+
+```{r}
+fit.roc1$auc
+#auc(fit.roc1)
+```
+
+False Positive vs Sensitivity curve is plotted in most ROC curves:
+
+```{r}
+plot(1-fit.roc1$specificities, fit.roc1$sensitivities, col="red", pch=16,
+     xlab="False Positive", 
+     ylab="Sensitivity")
+```
+
+We can get more from fit.roc1. For example, a curve shows the probability thresholds used and the corresponding False Positive rate.
+
+```{r}
+plot(fit.roc1$thresholds, 1-fit.roc1$specificities,  col="green", pch=16,  
+     xlab="Threshold on prob",
+     ylab="False Positive",
+     main = "Thresholds vs. False Postive")
+```
+
+### g. Positive Prediction
+
+Positive Prediction is a measure of the accuracy given the predictions.
+
+Positive Prediction = $P({\rm Positive \vert Classified\space as\space Positive})$
+
+For da.reg1, recall the confusion matrix being
+
+```{r}
+cm.1 <- table(mower$Ownership, da.reg1$classification)
+cm.1
+```
+
+```{r}
+positive.pred <- cm.1[2, 2] / (cm.1[1, 2] + cm.1[2, 2])
+positive.pred
+```
+
+### h. Negative Prediction 
+
+Negative Prediction = $P({\rm Negative \vert Classified\space as\space Negative})$
+
+```{r}
+negative.pred <- cm.1[1, 1] / (cm.1[1, 1] + cm.1[2, 1])
+negative.pred
+```
+
+
+
+
+## Case Study II: Personal Loan Acceptance
+
+The riding mowers example is a classic example and is useful in describing the concept and goal of discriminant analysis. 
+
+However, in today's business applications, the number of records is much larger, and their separation into classes is much less distinct. 
+
+To illustrate this, we consider the Universal Bank example, where the bank's goal is to identify new customers most likely to accept a personal loan.
+
+In this case, we will use `Age`, `Experience`, `Income`, `Family`, `CCAvg`, `Education`, `Mortage`, `Securities.Account`, `CD.Account`, `Online`, `CredictCard` to predict `Personal.Loan`, personal loan acceptance situation.
+
+```{r}
+bank <- read.csv("UniversalBank.csv")
+bank <- bank[,-c(1,5)] #Drop ID and zip code columns
+bank <- bank %>% mutate(Personal.Loan = as.factor(Personal.Loan),
+                        Education = as.factor(Education))
+```
+
+```{r}
+str(bank)
+names(bank)
+summary(bank)
+```
+
+### EDA
+
+For simplicity, we will consider only two predictor variables: 
+
+the customer's annual income (Income, in $000s), and the average monthly credit card spending (CCAvg, in $000s).
+
+```{r, warning = FALSE}
+set.seed(1101)
+bank[sample(5000,200,replace = FALSE),] %>%
+  ggplot(aes(x = Income, y= CCAvg, col=Personal.Loan)) +
+  geom_point() +
+  scale_colour_hue(name=NULL,labels=c('nonacceptor','acceptor')) +
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = 'Sample of 200 Customers') +
+  xlab("Annual Income($000s)") +
+  ylab("Monthly Credit Card Average Spending($000s)")
+```
+
+The first figure shows the acceptance of a personal loan by a subset of 200 customers from the bank's database as a function of Income and CCAvg. 
+
+We use a logarithmic scale on both axes to enhance visibility because there are many points condensed in the low-income, low-CC spending area. Even for this small subset, the separation is not clear.
+
+```{r, warning = FALSE}
+bank %>%
+  ggplot(aes(x = Income, y= CCAvg, col=Personal.Loan)) +
+  geom_point() +
+  scale_colour_hue(name=NULL,labels=c('nonacceptor','acceptor')) + 
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = 'All 5000 Customers') +
+  xlab("Annual Income($000s)") +
+  ylab("Monthly Credit Card Average Spending($000s)")
+```
+
+The second figure shows all 5000 customers and the added complexity of dealing with large numbers of records.
+
+### Training/Testing Error
+
+In order to evaluate the performance of each procedure, we need to estimate errors using unseen data. 
+
+Split the data to two sub-samples. We use Training Data to fit a model and use Testing Data to estimate the performance. Then choose the model with the larger AUC.
+
+```{r}
+bank.x <- model.matrix(Personal.Loan~.,bank)[,-1]
+bank.y <- bank$Personal.Loan
+```
+
+
+```{r}
+set.seed(7002)
+index.train <- sample(5000,4000) # Sample 4000 out of 5000 as training dataset
+bank.x.train <- bank.x[index.train,]
+bank.x.test <- bank.x[-index.train,]
+bank.y.train <- bank.y[index.train]
+bank.y.test <- bank.y[-index.train]
+```
+
+```{r}
+dim(bank.x.train)
+dim(bank.x.test)
+colnames(bank.x.train)
+```
+
+```{r}
+da.reg2.1 <- linDA(bank.x.train[,c(3,5)],bank.y.train) 
+# Only use Income and CCAvg as our predictors
+```
+
+Get `AUC` in test dataset of the model2.1
+```{r}
+pred2.1 <- classify(da.reg2.1, bank.x.test[,c(3,5)])
+prob2.1 <- exp(pred2.1$scores[,2])/(exp(pred2.1$scores[,1])+exp(pred2.1$scores[,2]))
+roc(bank.y.test, prob2.1)$auc
+```
+
+We add another one variable into LDA model, calculate the `AUC` of test dataset for each model. 
+
+We only select `Income` and `CCAvg` as our predictors, as adding another variable does not significantly change `AUC`.
+
+```{r}
+cmp <- data.frame(matrix(0, nrow = 1, ncol = 4))
+cmp[1,1] <- 'Income'
+cmp[1,2] <- 'CCAvg'
+cmp[1,3] <- ''
+cmp[1,4] <- round(roc(bank.y.test, prob2.1)$auc,4)
+colnames(cmp) <- c('Var1','Var2','Var3','AUC')
+for (i in c(1,2,4,6:12)){
+  da.reg2.2 <- linDA(bank.x.train[,c(3,5,i)],bank.y.train)
+  pred2.2 <- classify(da.reg2.2,bank.x.test[,c(3,5,i)])
+  prob2.2 <- exp(pred2.2$scores[,2])/(exp(pred2.2$scores[,1])+exp(pred2.2$scores[,2]))
+  cmp <- rbind(cmp,c(colnames(bank.x)[c(3,5,i)],round(roc(bank.y.test, prob2.2)$auc,4)))
+}
+cmp
+```
+
+```{r, warning = FALSE}
+bank %>%
+  ggplot(aes(x = Income, y= CCAvg, col=Personal.Loan)) +
+  geom_point() +
+  scale_colour_hue(name=NULL,labels=c('nonacceptor','acceptor')) + 
+  
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = 'All 5000 Customers') +
+  xlab("Annual Income($000s)") +
+  ylab("Monthly Credit Card Average Spending($000s)")
+```
+
+
+### Final Model
+
+```{r}
+# Using all data
+da.reg2 <- linDA(bank.x[,c(3,5)],bank.y)
+da.reg2$functions
+```
+
+#### Confussion Matrix
+```{r}
+confusionMatrix(da.reg2$classification,bank$Personal.Loan)
+```
+
+```{r}
+prob2 <- exp(da.reg2$scores[,2])/(exp(da.reg2$scores[,1])+exp(da.reg2$scores[,2]))
+fit.roc2 <- roc(bank$Personal.Loan, prob2, plot = T, col = 'blue')
+fit.roc2$auc
+```
+
+#### Classification Boundary
+
+$$
+\begin{aligned}
+\hat{\delta}(Nonacceptor|Income,CCAvg)&=\hat{\delta}(Acceptor|Income,CCAvg)\\
+-1.4942+0.03948*Income+0.09932*CCAvg&=  -9.029+0.08459*Income+0.2887*CCAvg \\
+0.04511*Income+0.1894*CCAvg &= 7.535\\
+CCAvg &= 39.78 - 0.2382*Income
+\end{aligned}
+$$
+
+```{r, warning = FALSE}
+  ggplot() +
+  geom_point(aes(x = Income, y= CCAvg, col=Personal.Loan), bank) +
+  geom_line(aes(x = seq(20,166,1), y = (seq(20,166,1)*(-0.2382) + 39.78)), 
+            linetype= 'dashed', size = 0.8, col = 'blue') +
+  scale_colour_hue(name=NULL,labels=c('nonacceptor','acceptor')) + 
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = 'All 5000 Customers') +
+  xlab("Annual Income($000s)") +
+  ylab("Monthly Credit Card Average Spending($000s)")
+```
+
+## Case Study III: IRIS
+
+In `IRIS` dataset, we try to use `Sepal.Length`, `Sepal.Width`, `Petal.Length` and `Petal.Width` to predict the `Species` of IRIS.
+
+```{r}
+str(iris)
+names(iris)
+summary(iris)
+```
+
+### EDA
+
+```{r}
+iris %>%  
+  ggplot() +
+  geom_point(aes(x = Sepal.Length, y = Sepal.Width, col = Species), size = 2) +
+  scale_colour_hue(name='Species')
+```
+
+```{r}
+iris %>%  
+  ggplot() +
+  geom_point(aes(x = Sepal.Length, y = Petal.Length, col = Species), size = 2) +
+  scale_colour_hue(name='Species')
+```
+
+### LDA
+
+```{r}
+iris.linda <- linDA(iris[,-5], iris$Species, prior = c(1/3,1/3,1/3))
+iris.linda$functions
+```
+
+We could caculate the classification score for each class.
+$$
+\begin{aligned}
+\hat{\delta}(setosa|Sepal,Petal) & = -86.31+23.54*SL+23.59*SW-16.43*PL-17.40*PW\\
+\hat{\delta}(versicolor|Sepal,Petal) & = -72.85+15.70*SL+7.073*SW+5.211*PL+6.434*PW\\
+\hat{\delta}(virginica|Sepal,Petal) & = -104.4+12.45*SL+3.685*SW+12.77*PL+21.08*PW
+\end{aligned}
+$$
+
+```{r}
+iris.linda$scores[c(1:10),]
+```
+
+#### Confusion Matrix
+
+```{r}
+confusionMatrix(iris.linda$classification, iris$Species)
+```
+
+#### Discriminant Variables
+
+We could also use `lda` in `mass` to get discriminant variables.
+
+When there are 3 classes, linear discriminant analysis can be viewed in 2 dimensional plot.
+
+```{r}
+iris.lda <- lda(iris$Species~., data=iris)
+iris.lda
+predict.iris_LDA <- predict(iris.lda)
+table(iris$Species, predict.iris_LDA$class)
+```
+```{r}
+all(predict.iris_LDA$class == iris.linda$classification)
+# two LDA functions give the same prediction as expected
+```
+
+```{r}
+iris_pred <- cbind(iris,
+                   data.frame(dv1 = iris.lda$scaling[1,1]*iris[,1] +
+                                iris.lda$scaling[2,1]*iris[,2] +
+                                iris.lda$scaling[3,1]*iris[,3] +
+                                iris.lda$scaling[4,1]*iris[,4],
+                              dv2 = iris.lda$scaling[1,2]*iris[,1] +
+                                iris.lda$scaling[2,2]*iris[,2] +
+                                iris.lda$scaling[3,2]*iris[,3] +
+                                iris.lda$scaling[4,2]*iris[,4],
+                              pred = predict.iris_LDA$class))
+iris_pred[c(1:6),]
+```
+
+```{r}
+iris_pred %>%  
+  ggplot() +
+  geom_point(aes(x = dv1, y = dv2, col = Species), size = 2) +
+  xlab("Discriminant Variable 1") + 
+  ylab("Discriminant Variable 2") +
+  scale_colour_hue(name='Species')
+```

@@ -1,0 +1,198 @@
+---
+title: "Logistic Regression with More Than Two Levels"
+author: 'MSBA7002: Business Statistics'
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = "hide", fig.width=6, fig.height=4)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(bestglm, glmnet, leaps, car, tidyverse, mapproj)
+```
+
+\tableofcontents
+
+## 1. Car Preference Data, Nominal Logistic Regression
+
+1.1 Prepare data:
+
+```{r}
+car <- data.frame(res.unim=c(26, 9, 5, 40, 17, 8), res.im=c(12, 21, 14, 17, 15, 15), 
+                  res.veim=c(7, 15, 41, 8, 12, 18), sex=c(rep("F", 3), rep("M",3)),
+                  age=rep(c("18-23", "24-40", ">40"), 2)) 
+car$age=factor(car$age, levels=c("18-23", "24-40", ">40"))
+```
+
+1.2 Fit nominal logistic regression: 
+
+```{r}
+library(nnet)
+### R uses "dummy coding" (also known as "contr.treatment") for contrasts. Dummy coding compares each level of the factor variable to a baseline level, which is represented by a vector of 0s and 1s.
+
+#"contr.treatment": This is the default contrast type in R. It compares each level of a factor variable to a baseline level by coding them as 0s and 1s. The baseline level is typically the first level of the factor variable.
+
+#"contr.poly": This contrast type creates orthogonal polynomials for comparing the levels of a factor variable. Orthogonal polynomials are a set of orthogonal functions used to represent the levels of the factor variable in a numerical form. This type of contrast is useful when you want to capture non-linear trends or complex relationships between the levels of a factor variable.
+
+options(contrasts=c("contr.treatment", "contr.poly"))
+car.mult <- multinom(cbind(res.unim, res.im, res.veim)~sex+age, data=car)
+summary(car.mult)
+
+z <- summary(car.mult)$coefficients/summary(car.mult)$standard.errors
+# 2-tailed Wald z tests to test significance of coefficients
+p <- (1 - pnorm(abs(z), 0, 1)) * 2
+p
+
+
+```
+
+```{r}
+predict(car.mult, car, type="p")
+```
+
+glmnet can be used by setting lambda=0. No inference provided though.
+
+1.3 Fit separate binary logistic regression:
+
+```{r}
+library(nnet)
+options(contrasts=c("contr.treatment", "contr.poly"))
+car.bin <- multinom(cbind(res.unim, res.im)~sex+age, data=car)
+summary(car.bin)
+```
+
+```{r}
+library(nnet)
+options(contrasts=c("contr.treatment", "contr.poly"))
+car.bin <- multinom(cbind(res.unim, res.veim)~sex+age, data=car)
+summary(car.bin)
+```
+
+This generates different results because $\pi_1$ is shared by the two log-likelihood functions.
+
+1.4 Fit nominal logistic regression with just sex 
+
+```{r}
+library(nnet)
+options(contrasts=c("contr.treatment", "contr.poly"))
+car.mult <- multinom(cbind(res.unim, res.im, res.veim)~sex, data=car)
+summary(car.mult)
+
+z <- summary(car.mult)$coefficients/summary(car.mult)$standard.errors
+# 2-tailed Wald z tests to test significance of coefficients
+p <- (1 - pnorm(abs(z), 0, 1)) * 2
+p
+
+```
+
+## 2. Car Preference Data, Ordinal Logistic Regression
+
+Fit proportional odds logistic regression:
+
+```{r}
+library(MASS)   ### the library containing polr
+freq <- c(car$res.unim, car$res.im, car$res.veim)
+res <- c(rep(c("unim", "im", "veim"), c(6,6,6)))
+res <- factor(res, levels=c("unim", "im", "veim"), ordered=T)
+car.ord <- data.frame(res=res, sex=rep(car$sex, 3), age=rep(car$age, 3), freq=freq)
+car.ord$age=factor(car.ord$age, levels=c("18-23", "24-40", ">40"))
+car.polr <- polr(res~sex+age, data=car.ord, weights=freq, Hess=TRUE)
+summary(car.polr)
+```
+
+```{r}
+predict(car.polr, car.ord, type="p")
+```
+
+## 3. Analysis of the CNS data 
+
+The data concern live births with deformations of the central nervous system in south Wales.
+
+3.1 Prepare data: 
+
+```{r}
+cns <- read.csv("cns.TXT", sep=" ", header=T, as.is=T)
+cns
+names(cns)
+```
+
+```{r}
+cns$CNS <- cns$An+cns$Sp+cns$Other
+plot(log(CNS/NoCNS)~Water, cns, pch=as.character(Work))
+```
+
+Note one potential outlier, falls with increasing water hardness, higher for manual workers.
+
+3.2 Fit (binomial) logistic regresion model:
+
+```{r}
+#binmodw <- glm(cbind(CNS, NoCNS)~Water+Work, cns, family=binomial)
+#summary(binmodw)
+
+binmodw <- multinom(cbind(CNS, NoCNS)~Water+Work, cns)
+summary(binmodw)
+
+z <- summary(binmodw)$coefficients/summary(binmodw)$standard.errors
+# 2-tailed Wald z tests to test significance of coefficients
+p <- (1 - pnorm(abs(z), 0, 1)) * 2
+p
+
+```
+Both Water and Work are significant. 
+
+How to interpret the coefficients?
+
+3.3 Fit multinomial model with 3 levels:
+
+```{r}
+library(nnet)
+cmmod <- multinom(cbind(An, Sp, Other)~Water+Work, cns)
+summary(cmmod)
+### by looking at the coefficients and se, none of the covariates appear to be significant.
+z <- summary(cmmod)$coefficients/summary(cmmod)$standard.errors
+# 2-tailed Wald z tests to test significance of coefficients
+p <- (1 - pnorm(abs(z), 0, 1)) * 2
+p
+
+nmod <- step(cmmod)
+### confirm that the best model is with no covariate
+nmod
+
+
+```
+
+The fitted proportions:
+
+```{r}
+cc <- c(0, 0.28963, -0.98083)
+names(cc) <- c("An", "Sp", "Other")
+exp(cc)/sum(exp(cc))
+```
+
+3.4 What happens if we fit a multinomial logit model with 4 categories to begin with?
+
+```{r}
+mmod <- multinom(cbind(NoCNS, An, Sp, Other)~Water+Work, cns)
+step(mmod)
+z <- summary(mmod)$coefficients/summary(mmod)$standard.errors
+# 2-tailed Wald z tests to test significance of coefficients
+p <- (1 - pnorm(abs(z), 0, 1)) * 2
+p
+
+```
+
+
+
+
+

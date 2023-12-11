@@ -1,0 +1,409 @@
+---
+title: "Case: Multinomial Regression for Data Analytics at Chow Tai Fook"
+author: 'MSBA7002: Business Statistics'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r include=FALSE}
+pacman::p_load(fpp3, readxl, tidyverse, dplyr, ggplot2, mnlogit, mlogit, nnet)
+```
+
+# 1. Problem Background
+
+Chow Tai Fook Jewellery Group (CTF) was one of the world’s largest jewelers, with a Greater China–focused retail network of over 3,100 points of sale (POS) globally as of 31 March 2019. CTF offered a wide range of products in four major categories, including gem- set jewelry, gold products (999.9 pure gold), platinum/karat gold products, and watches. Reflecting its multibrand strategy to serve customers’ needs during their different life stages, CTF offered a wide array of brands and products for every occasion. It rolled out new collections frequently to keep the display window fresh and to render a sense of uniqueness to each customer. Unlike fast-moving consumer goods, the high value of inventory balances and relatively slow turnover of individual SKUs in the jewelry industry made good inventory management the key to ensuring healthy profitability.
+
+To proactively respond to the dynamic market changes, CTF deployed big data analytics to improve inventory management as part of its “Smart+2020” strategy. Under the lead of Bobby Liu, the executive director in charge of innovation and technology at CTF, the company formed the strategic business office (SBO) and delegated the SBO to leverage insights from data and assist store managers to optimize inventory assortment and planning at each POS. The SBO was responsible for preparing the quarter-end reports for the senior management team members, who would use the reports for decision making throughout CTF. To compile the report, the SBO needed to first gather available data and then distill useful information by aggregating the data along different dimensions and creating variables. The SBO then chose appropriate analytics methods, developed efficient algorithms, and finally generated prescriptions and insights.
+
+
+## 1.1 The Role of SBO
+
+"It is our passion to make use of latest advanced analytics and technology innovation to bring in creativity and support growth and sustainability of the Group." –Jade Lee, General Manager, Analytics and Technology Application, Sustainability and Innovations Centre, Chow Tai Fook
+
+Jade Lee led the SBO team, which had two key functions. First, to deliver advanced analytics to make smarter decisions. Second, to drive the implementation of the latest technology applications in the Group. Jade had over 20 years of experience in advanced analytics carrying out consulting and business management roles with leading business analytics corporations. “Given the uniqueness of the jewelry industry, we need to work out complicated optimization solutions for our inventory management.” said Jade.
+
+"The retail industry, however, is very different from the finance sector. We need to respond more swiftly and creatively to customer preferences." –Cher Ng, Associate Director of Hong Kong and Macau Strategic Business Office, Chow Tai Fook.
+
+Cher Ng graduated from HKU in a statistics postgraduate program in 2000. She first worked in the finance sector for a few years. Cher said, “After the financial crisis, a lot of regulations came out, and we were working more on the regulatory side with limited creativity.” Thus, she decided to apply her analytical skills to the more dynamic retail industry.
+
+At CTF, Cher worked at the SBO and focused in the data analytics stream. Instead of dealing with the operations, the SBO leveraged the operational data to assess historical performance and predict future trends in the jewelry industry. SBO reports went directly to the senior management.
+
+## 1.2 CTF’s business and challenges
+
+Now you are asked to take Cher’s standpoint and summarize the main analytics challenges for jewelry demand forecasting. 
+Which of the following is not a major analytics challenge for CTF’s demand forecasting?
+\newline A. There were many categories and SKUs, but the sales number for a single product was small. 
+\newline B. Because the products were slow-moving, CTF rarely introduced new products.
+\newline C. The sales or demand of different products were substitutable.
+\newline D. The viewing history was not directly linked to any purchase records.
+
+The true analytics challenges for demand forecasting are A, C, and D.
+
+First, because jewelry products are of high value and slow-moving, most products have single digit sales numbers per month or per year. For most days or weeks of a year, the sales number of a product is zero, so it is difficult to capture the correlation between the sales number and any other variables. Thus, it is almost impossible to build a meaningful model to predict demand of a product on a daily or weekly basis. (If we build a linear regression model, the predictions in most cases should be close to zero and could even be negative sometimes.) If we aggregate the data on a yearly basis, then we will have very few data points for each product.
+
+Second, the sales or demand of different products are substitutable. This is because customers may accept more than one design in a category, but they just want to buy one piece. If the best choice is not available, then a customer may buy the second-best choice. Hence, the sales of a product may depend on the availability of other products. The demand forecasting model should be able to describe the relationship among different related products.
+
+Third, there are 16 product categories with more than 15,000 distinct products offered by CTF, but a customer normally only chooses from a small subset of these products. To better capture the utilities of different products, it is important to know what products a customer considered when s/he made the purchase decision. However, at that time, though the viewing history was recorded, the viewing data was not directly linked to the purchase data.
+
+As a result, when we train a demand forecasting model, we should not just use the sales data of a particular product or use the aggregate sales numbers of related products.
+To build the demand forecasting model, we need to make the following assumptions.
+\newline (1) Each category has its intrinsic demand. For example, each potential customer may want to buy a ring and some customers would like to buy a necklace.
+\newline (2) There is no intrinsic demand for any single product. This is because customers rarely visit the jewelry stores and thus they have no idea what products are available in a store. They visit a store because they want to buy a product from a certain category, and they will make a choice after they see the products in the choice set. This is quite different from the traditional retailing business where customers know what toothpastes are in a supermarket.
+
+Based on the above assumptions, the instructor can propose a two-step approach: First, forecast the demand of a category in a given period, and then allocate the demand to each product based on the assortment and choice model. For the first step, CTF may focus on the aggregate sales number of a category and use a regression model with time series components for the forecast. This document focuses on the second step and the choice model in this case. We are going to use the multinomial regression to predict customers' choice.
+
+## 1.3 Data
+
+```{r}
+my_data <- read.csv('chow_tai_fook.csv')
+my_data$baseDate <- as.Date(my_data$baseDate)
+my_data$productID <- as.factor(my_data$productID)
+my_data$mode <- as.logical(my_data$mode)
+summary(my_data)
+```
+
+The data set contains the following variables from 3 branches of CTF with id 16, 26, 222.
+
+* individual: the index of each purchase. It is aligned with baseDate. If the baseDate is earlier, the individual has a smaller index number.
+* baseDate: the date of the purchase happened. 
+* branchID\_16: binary variable. 1-purchase happened in branch 16.
+* branchID\_26: binary variable. 1-purchase happened in branch 26.
+* branchID\_222: binary variable. 1-purchase happened in branch 222.
+* ct: customer arrival count of the branch on that day. 
+* ProductID: the ID of available products. Each individual has same choices with the same order.
+* r\_info1\_11: binary variable. 1 – the value of r_info1 is 11. r_info1 is a categorical variable describing a undisclosed feature of a product.
+* r\_info1\_113\_276: binary variable. 1 – the value of r_info1 is 113 or 276.
+* r\_info1\_111\_126: binary variable. 1 – the value of r_info1 is 111 or 126.
+* r\_info3\_1: binary variable. 1 – the value of r_info3 is 1. r_info3 is a categorical variable describing a undisclosed feature of a product.
+* r\_info3\_23: binary variable. 1 – the value of r_info3 is 2 or 3.
+* r\_info3\_4567: binary variable. 1 – the value of r_info3 is 4 or 5 or 6 or 7.
+* common\_info1\_0: binary variable. 1 – the value of common_info1 is 0. common_info1 is a categorical variable describing a undisclosed feature of a product.
+* mode: binary variable. 1 – individual n chooses to buy that product. Each individual only can choose one product.
+* noStock: the beginning inventory level of the product on that day. 
+* noDisplay: the number of units of the product displayed in the show room on that day.
+* noSold: The number of units sold on that day. The branch can borrow the product from other branches, so the sales can be positive even if the stock level is zero.
+
+
+\newpage
+# 2. Multinomial regression model
+The model is to predict customers' choice.
+
+## 2.1 Data preparation
+
+In our analysis, we use the sales records in last 60 days as the test data and the previous records as the training data. In the training data, there are only 35 products with positive sales. Hence, we focus on these 35 products and assume that they form the choice set of each customer. The total sales number of these 35 products in the entire data set is 316, and we assume these are 316 independent purchases.
+
+```{r}
+# Training/Testing set split
+training <- my_data %>% filter(baseDate < "2006-11-04")
+nrow(training)
+testing <- my_data %>% filter(baseDate >= "2006-11-04")
+nrow(testing)
+```
+
+## 2.2 Model Fitting using multinom
+
+The function "multinom" from package \{nnet\} assumes all features are individual specific, so the final model will contain the effects of all included variables for the log odds of 35 classes. 
+
+```{r}
+training_selected <- training[training$mode == TRUE,]
+
+training_multinom <- training
+training_multinom$purchaseID <- rep(training_selected$productID, each=35)
+
+fit.multinom <- multinom(purchaseID ~ r_info1_11 + r_info1_111_126 + 
+                  r_info3_1 + r_info3_23 + r_info3_4567 + common_info1_0 + 
+                  ct + branchID_16 + branchID_26, data=training_multinom) 
+fit.multinom
+```
+
+### 2.2.1 Training result
+
+```{r}
+#Predicted training result
+train_result <- predict(fit.multinom, newdata=training_selected)
+#train_result
+
+#Actual result of training set
+train_actual <- training_selected$productID
+#train_actual
+```
+
+Training accuracy of the predicted 1st choice
+```{r}
+train_correct_cnt <- 0
+for (i in 1:length(train_actual)){
+  if (train_actual[i] == train_result[i]){
+    train_correct_cnt = train_correct_cnt + 1
+  }
+}
+train_correct_cnt
+length(train_actual)
+train_correct_cnt/length(train_actual)
+```
+
+Among 228 training data, 54 actual choice (23.7\%) is indeed the top choice. 
+
+```{r}
+train_result_df <- predict(fit.multinom, newdata=training_selected, 
+                           type="probs")
+#train_result_df
+```
+
+Training accuracy of the predicted first 3 choices
+```{r}
+train_correct_cnt_1 <- 0
+for (i in 1:length(train_actual)){
+  array_1 <- sort(desc(train_result_df[i,]))[1:3]
+  name_1 <- names(array_1)
+  if (train_actual[i] %in% name_1){
+    train_correct_cnt_1 = train_correct_cnt_1 + 1
+  }
+}
+train_correct_cnt_1
+length(train_actual)
+train_correct_cnt_1/length(train_actual)
+```
+
+Among 228 training data, 99 actual choice (43.4\%) is in the first 3 choices with highest predicted probability. 
+
+Training accuracy of the predicted first 5 choices
+```{r}
+train_correct_cnt_2 <- 0
+for (i in 1:length(train_actual)){
+  array_1 <- sort(desc(train_result_df[i,]))[1:5]
+  name_1 <- names(array_1)
+  if (train_actual[i] %in% name_1){
+    train_correct_cnt_2 = train_correct_cnt_2 + 1
+  }
+}
+train_correct_cnt_2
+train_correct_cnt_2/length(train_actual)
+```
+
+
+### 2.2.2 Testing result
+
+```{r}
+#TEST
+testing_selected <- testing[testing$mode == TRUE,]
+
+test_result <- predict(fit.multinom, newdata=testing_selected)
+#test_result
+
+# Actual result of test set
+test_actual <- testing_selected$productID
+#test_actual
+```
+
+Test accuracy of predicted 1st choice
+```{r}
+test_correct_cnt <- 0
+for (i in 1:length(test_actual)){
+  if (test_actual[i] == test_result[i]){
+    test_correct_cnt = test_correct_cnt + 1
+  }
+}
+test_correct_cnt
+length(test_actual)
+test_correct_cnt/length(test_actual)
+```
+
+```{r}
+test_result_df <- predict(fit.multinom, newdata=testing_selected,
+                          type="probs")
+#test_result_df
+```
+
+Test accuracy of predicted first 3 choice
+```{r}
+test_correct_cnt_1 <- 0
+for (i in 1:length(test_actual)){
+  array_1 <- sort(desc(test_result_df[i,]))[1:3]
+  name_1 <- names(array_1)
+  if (test_actual[i] %in% name_1){
+    test_correct_cnt_1 = test_correct_cnt_1 + 1
+  }
+}
+test_correct_cnt_1
+test_correct_cnt_1/length(test_actual)
+```
+
+Test accuracy of predicted first 5 choice
+```{r}
+test_correct_cnt_2 <- 0
+for (i in 1:length(test_actual)){
+  array_1 <- sort(desc(test_result_df[i,]))[1:5]
+  name_1 <- names(array_1)
+  if (test_actual[i] %in% name_1){
+    test_correct_cnt_2 = test_correct_cnt_2 + 1
+  }
+}
+test_correct_cnt_2
+test_correct_cnt_2/length(test_actual)
+```
+
+
+\newpage
+
+## 2.3 Model Fitting using mnlogit
+
+The function "mnlogit" from package \{mnlogit\} can be more flexible in modeling alternative specific variables. We would like to reduce the number of parameters as in the previous section ((35-1) * 10 = 340 coefficients in the previous model since the first class is our baseline) and assume the effects of "r_info1", "r_info3", "common_info1" on log odds are shared for each product. We can do this using "mnlogit".
+
+```{r}
+# Convert dataframe into mlogit format with shape "long" to fit mnlogit model
+training_mlogit <- mlogit.data(training, choice = "mode", shape = "long", 
+                               alt.var = "productID", id.var = "individual")
+testing_mlogit <- mlogit.data(testing, choice = "mode", shape = "long", 
+                              alt.var = "productID", id.var = "individual")
+# choice - a binary level variable indicating customer buy or not buy
+# alt.var - the column indicating the choices
+# id.var - the column indicating the choice-maker
+```
+
+```{r, warning=FALSE}
+# mnlogit model formula
+fm_train <- formula(mode ~ r_info1_11 + r_info1_111_126 +  r_info3_1 + 
+                      r_info3_23 + r_info3_4567 + common_info1_0 + 1| ct + 
+                      branchID_16 + branchID_26 + 1| 1)
+#training
+fit_train <- mnlogit(fm_train, training_mlogit, choiceVar= "productID",ncores=2)
+fit_train
+```
+
+```{r}
+# just for data formatting
+attr(testing_mlogit,"index") <- idx(testing_mlogit)
+attr(training_mlogit,"index") <- idx(training_mlogit)
+```
+
+The model has (35-1) * 4 + 6 = 142 coefficients, where the 6 coefficients are shared across products. 
+
+### 2.3.1 Training result
+```{r}
+#Predicted training result
+train_result <- predict(fit_train,newdata=training_mlogit, probability = F,
+                        choiceVar = "productID")
+#train_result
+
+#Actual result of training set
+train_actual <- (training %>% filter(mode == 1))$productID
+#train_actual
+```
+
+Training accuracy of the predicted 1st choice
+```{r}
+train_correct_cnt <- 0
+for (i in 1:length(train_actual)){
+  if (train_actual[i] == train_result[i]){
+    train_correct_cnt = train_correct_cnt + 1
+  }
+}
+train_correct_cnt
+length(train_actual)
+train_correct_cnt/length(train_actual)
+```
+
+```{r}
+train_result_df <- predict(fit_train,newdata=training_mlogit, probability = T,
+                           choiceVar = "productID")
+#train_result_df
+```
+
+Training accuracy of the predicted first 3 choices
+```{r}
+train_correct_cnt_1 <- 0
+for (i in 1:length(train_actual)){
+  array_1 <- sort(desc(train_result_df[i,]))[1:3]
+  name_1 <- names(array_1)
+  if (train_actual[i] %in% name_1){
+    train_correct_cnt_1 = train_correct_cnt_1 + 1
+  }
+}
+train_correct_cnt_1
+train_correct_cnt_1/length(train_actual)
+```
+
+Training accuracy of the predicted first 5 choices
+```{r}
+train_correct_cnt_2 <- 0
+for (i in 1:length(train_actual)){
+  array_1 <- sort(desc(train_result_df[i,]))[1:5]
+  name_1 <- names(array_1)
+  if (train_actual[i] %in% name_1){
+    train_correct_cnt_2 = train_correct_cnt_2 + 1
+  }
+}
+train_correct_cnt_2
+train_correct_cnt_2/length(train_actual)
+```
+
+### 2.3.2 Testing result
+
+```{r}
+#TEST
+test_result <- predict(fit_train,newdata=testing_mlogit, probability = F,
+                       choiceVar = "productID")
+#test_result
+
+# Actual result of test set
+test_actual <- (testing %>% filter(mode == 1))$productID
+#test_actual
+```
+
+Test accuracy of predicted 1st choice
+```{r}
+test_correct_cnt <- 0
+for (i in 1:length(test_actual)){
+  if (test_actual[i] == test_result[i]){
+    test_correct_cnt = test_correct_cnt + 1
+  }
+}
+test_correct_cnt
+length(test_actual)
+test_correct_cnt/length(test_actual)
+```
+
+```{r}
+test_result_df <- predict(fit_train,newdata=testing_mlogit, probability = T, 
+                          choiceVar = "productID")
+#test_result_df
+```
+
+Test accuracy of predicted first 3 choice
+```{r}
+test_correct_cnt_1 <- 0
+for (i in 1:length(test_actual)){
+  array_1 <- sort(desc(test_result_df[i,]))[1:3]
+  name_1 <- names(array_1)
+  if (test_actual[i] %in% name_1){
+    test_correct_cnt_1 = test_correct_cnt_1 + 1
+  }
+}
+test_correct_cnt_1
+test_correct_cnt_1/length(test_actual)
+```
+
+Test accuracy of predicted first 5 choice
+```{r}
+test_correct_cnt_2 <- 0
+for (i in 1:length(test_actual)){
+  array_1 <- sort(desc(test_result_df[i,]))[1:5]
+  name_1 <- names(array_1)
+  if (test_actual[i] %in% name_1){
+    test_correct_cnt_2 = test_correct_cnt_2 + 1
+  }
+}
+test_correct_cnt_2
+test_correct_cnt_2/length(test_actual)
+```
+
+In terms of performance, the sparser model from mnlogit gives slight improvement over the dense model from multinom. So it may be slightly favored.

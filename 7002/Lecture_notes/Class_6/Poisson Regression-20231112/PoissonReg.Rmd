@@ -1,0 +1,208 @@
+---
+title: "Poisson Regression"
+author: 'MSBA7002: Business Statistics'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r, echo=FALSE, message=FALSE}
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(bestglm, glmnet, car, tidyverse, ISLR2)
+```
+
+\tableofcontents
+
+## 1. Bikeshare Data
+
+### 1.1 Fit OLS regression
+
+Let us first fit a naive OLS regression as a benchmark for comparison.
+
+```{r}
+attach(Bikeshare)
+dim(Bikeshare)
+names(Bikeshare)
+contrasts(Bikeshare$hr) = contr.sum(24)
+contrasts(Bikeshare$mnth) = contr.sum(12)
+
+mod.lm <- lm(bikers ~ mnth + hr + workingday + temp + weathersit, 
+             data = Bikeshare)
+#summary(mod.lm)
+```
+
+```{r}
+coef.months <- c(coef(mod.lm)[2:12], 0) - sum(coef(mod.lm)[2:12])/12
+# demean to make the total coef of 12 months to be zero
+plot(coef.months, xlab = "Month", ylab = "Coefficient", xaxt = "n", 
+     col = "blue", pch = 19, type = "o")
+axis(side = 1, at = 1:12, labels = c("J", "F", "M", "A", "M", "J", 
+                                     "J", "A", "S", "O", "N", "D"))
+
+coef.hours <- c(coef(mod.lm)[13:35], 0) - sum(coef(mod.lm)[13:35])/24
+# demean to make the total coef of 24 hours to be zero
+plot(coef.hours, xlab = "Hour", ylab = "Coefficient", 
+     col = "blue", pch = 19, type = "o")
+```
+
+
+### 1.2 Fit Poisson regression
+
+Now, we consider instead fitting a Poisson regression model to the Bikeshare data. Very little changes, except that we now use the function glm() with the argument family = poisson to specify that we wish to fit a Poisson regression model.
+
+```{r}
+mod.pois <- glm(bikers ~ mnth + hr + workingday + temp + weathersit, 
+                data = Bikeshare, family = poisson)
+summary(mod.pois)
+```
+
+```{r, echo=FALSE}
+coef.months <- c(coef(mod.pois)[2:12], 0) - sum(coef(mod.pois)[2:12])/12
+plot(coef.months, xlab = "Month", ylab = "Coefficient", xaxt = "n", 
+     col = "blue", pch = 19, type = "o")
+axis(side = 1, at = 1:12, labels = c("J", "F", "M", "A", "M", "J", 
+                                     "J", "A", "S", "O", "N", "D"))
+
+coef.hours <- c(coef(mod.pois)[13:35], 0) - sum(coef(mod.pois)[13:35])/24
+plot(coef.hours, xlab = "Hour", ylab = "Coefficient", 
+     col = "blue", pch = 19, type = "o")
+```
+
+
+### 1.3 Compare predictions
+
+We can once again use the predict() function to obtain the fitted values (predictions) from this Poisson regression model. However, we must use the argument type = "response" to specify that we want R to output $exp(\hat\beta_0 + \hat\beta_1 X_1 + \dots + \hat\beta_p X_p)$ rather than $\hat\beta_0 + \hat\beta_1 X_1 + \dots + \hat\beta_p X_p$, which it will output by default.
+
+```{r}
+plot(predict(mod.lm), predict(mod.pois, type = "response"))
+abline(0, 1, col = 2, lwd = 3)
+```
+
+The predictions from the Poisson regression model are correlated with those from the linear model; however, the former are non-negative. As a result the Poisson regression predictions tend to be larger than those from the linear model for either very low or very high levels of ridership.
+
+```{r}
+cor(predict(mod.lm), Bikeshare$bikers)
+cor(predict(mod.pois, type = "response"), Bikeshare$bikers)
+```
+
+The correlation of predicitons from Poisson regression with the truth is indeed higher. 
+
+
+\newpage
+## 2. The Children Ever Born Data
+
+### 2.1 EDA
+
+```{r}
+ceb <- read.table('ceb.txt')
+# names(ceb)
+
+ceb$dur <- factor(ceb$dur, levels = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29"))
+ceb$res <- factor(ceb$res)
+ceb$educ <- factor(ceb$educ, levels = c("none", "lower", "upper", "sec+"))
+ceb$y <- round(ceb$y)
+
+contrasts <- list(dur = contr.treatment(levels(ceb$dur), base=1),
+                  res = contr.treatment(levels(ceb$res), base=2), 
+                  educ = contr.treatment(levels(ceb$educ), base=1))
+summary(ceb)
+```
+
+These are the data from Fiji on children ever born^[The data was origniallly downloaded from the website https://data.princeton.edu/wws509/datasets/#ceb with notes https://data.princeton.edu/wws509/notes/c4.pdf]. The dataset has 70 rows representing grouped individual data. Each row has entries for:
+
+* The cell number (1 to 71, cell 68 has no observations),
+* marriage duration (1=0-4, 2=5-9, 3=10-14, 4=15-19, 5=20-24, 6=25-29),
+* residence^[Suva is the capital city of Fiji, Urban means other urban areas except Suva.] (1=Suva, 2=Urban, 3=Rural),
+* education (1=none, 2=lower primary, 3=upper primary, 4=secondary+),
+* mean number of children ever born (e.g. 0.50),
+* variance of children ever born (e.g. 1.14), and
+* number of women in the cell (e.g. 8).
+
+
+\newpage
+
+Let us check the mean-variance relationship first to make sure Poisson could be a reasonable model to use.
+
+```{r}
+plot(log(ceb$mean[ceb$n >= 20]), log(ceb$var[ceb$n >= 20]), pch=19)
+```
+
+We plot the variance versus the mean for all cells in the table with at least 20 observations. For convenience we used a log-log scale. Clearly,
+the assumption of constant variance used by OLS is not valid. Although the variance is not exactly equal to the mean, it is not far from being proportional to it. 
+Thus, we conclude that we can do far more justice to the data by fitting
+Poisson regression models than by clinging to ordinary linear models.
+
+
+
+### 2.2 Fit Poisson regression
+
+The dataset only contains grouped data instead of babies each individual woman has. But we only summarized mean of number of babies, variance of number of babies and the sample size of women with identical predictors in one row. 
+
+Are we able to still run Poisson regression? Yes, but using the nice "offset" feature of "glm" function. Suppose the $l$-th woman in a group has $Y_l$ babies. The group total is $Y = \sum_{l=1}^n Y_l$ and we have $n$ women in this group. In Poisson regression, if we know
+each $Y_l$, we assume
+$$
+\log E[Y_l] = X'\beta.
+$$
+Note that all $Y_l$'s have shared predictors $X$. Then we have
+$$
+\log E[Y] = \log E[\sum_{l=1}^n Y_l] = \log \sum_{l=1}^n E[Y_l] = \log n E[Y_l] = \log n + X'\beta.
+$$
+This means if we only observe $Y$, but fail to observe each $Y_l$, we can still treat $Y$ as the observed count data, but with an additional offset term $\log n$. Let us now add the offset term and fit the Poisson regression. 
+
+
+```{r}
+fit.ceb <- glm(y ~ dur + res + educ + offset(log(n)),
+               family=poisson, data=ceb, contrasts=contrasts)
+summary(fit.ceb)
+```
+
+
+
+### 2.3 Interpret results
+
+* What is the expected number of children for a Suvanese woman with no education who have been married 0-4 years?
+$$
+\exp\{-0.1173\} = 0.89.
+$$
+
+* As we move from duration 0-4 to 5-9 the log of the mean
+increases by almost one, which means that the number of CEB gets multiplied by $\exp\{0.9977\} = 2.71$. By duration 25-29, women in each category of
+residence and education have $\exp\{1.977\} = 7.22$ times as many children as they did at duration 0-4.
+
+* The effects of residence show that Suvanese women have the lowest fertility. At any given duration since first marriage, women living in other urban
+areas have 12\% larger families ($exp\{0.1123\} = 1.12$) than Suvanese women
+with the same level of education. Similarly, at any fixed duration, women
+who live in rural areas have 16\% more children ($\exp\{0.1512\} = 1.16$), than
+Suvanese women with the same level of education.
+
+* Finally, we see that higher education is associated with smaller family
+sizes net of duration and residence. At any given duration of marriage,
+women with upper primary education have 10\% fewer kids, and women with
+secondary or higher education have 27\% fewer kids ($1-\exp\{-0.3096\} = 0.27$), than women with no education who live in the same type of place of residence.
+
+Do we have interaction effect between marital duration and education here?
+
+From the model itself, we did not include any interaction term. However, the model is additive in the log scale.  In the original scale the model is multiplicative, and postulates relative effects which translate into different absolute effects depending on the values of the other predictors.
+
+Consider the effect of education. Women with secondary or higher education have 27\% fewer kids than women with no education. 
+
+```{r}
+newdata <- data.frame(dur=rep(levels(ceb$dur), each=2), res=rep('Suva',12),
+                      educ=rep(c('none','sec+'), 6), n=rep(1,12))
+
+newdata$prediction <- predict(fit.ceb, newdata=newdata, type = "response")
+newdata
+```
+
+Note that the effect of 27\% fewer kids means different number of kids when the marital duration changes. If we had used OLS regression for these data we would have ended up with a large number of interaction effects to accommodate the fact that residence and educational differentials increase with marital duration.
+

@@ -1,0 +1,493 @@
+---
+title: "MSBA7002_Tutorial_2"
+author: "Yutao DENG"
+date: "2023-11-10"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+    number_sections: yes
+    latex_engine: xelatex
+  word_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+\fontsize{12}{22}
+
+\newpage
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(results='hide', tidy = T)
+```
+
+
+# Formating Markdown
+
+## Equations 
+
+$$
+\begin{aligned}
+L(\beta|X) &= \prod_{i=1}^n p_i^{a}(1-p_i)^{b}\\
+log(L(\beta|X) )&=\sum_{i=1}^n (a * log(p_i) + b * log(1-p_i))
+\end{aligned}
+$$
+
+
+$$
+X =
+\left\{\begin{array}{rl}
+                  {1} & \text{true} \\
+                  {0} & \text{false} \\
+                \end{array}
+              \right.
+$$
+
+## Itemize and Enumerate
+
+For PDF output:
+\begin{itemize}
+  \item 1111
+  \item 222
+  \item 33
+\end{itemize}
+
+
+\begin{enumerate}
+  \item AAA
+  \item BB
+  \item C
+\end{enumerate}
+
+
+For HTML output: (remember to leave an empty line before the list)
+
+* Item A
+* Item B
+  + Item B1
+
+1. Item 1
+2. Item 2
+3. Item 3
+4. Item 4
+    + Item 3a
+    + Item 3b
+
+
+
+# Package Management 
+
+## Install packages in R
+```{r}
+# Install pacman package
+# install.packages("pacman")
+
+# Install package from url or file
+# packageurl <- "https://cran.r-project.org/src/contrib/Archive/DiscriMiner/DiscriMiner_0.1-29.tar.gz"
+# install.packages(packageurl, repos=NULL, type="source")
+
+# Load pacman package
+library("pacman")
+
+# Detach pacman package
+detach("package:pacman")
+```
+
+
+## Using pacman
+```{r}
+# package list for today: pROC,caret,dplyr,e1071
+
+#Fisrt import the pacman package
+# library("pacman")
+# p_load(pROC,caret,dplyr,e1071)
+# p_unload(pROC,caret,dplyr,e1071)
+
+#Without loading the pacman package
+# detach("package:pacman")
+pacman::p_load(ggcorrplot, corrplot, car, nnet, GGally,kableExtra,pROC,caret,dplyr,e1071)
+
+```
+# Data manipulation
+
+## Using dplyr
+```{r}
+# Load the data of smartphone
+sp <- read.csv("smartphone.dat")
+
+# colnames(sp) # without dplyr
+sp %>% 
+  colnames()
+```
+
+```{r}
+# sum(is.na(sp)) # without dplyr
+sp %>% 
+  is.na() %>% 
+  sum()
+```
+
+```{r}
+# select from sp data where Group is Med
+sp %>% 
+  filter(Group=='Med')
+
+# select from sp data where Group is Med or Low
+sp %>% filter(Group %in% c('Med', 'Low'))
+```
+
+```{r}
+# select some column by name 
+sp %>% 
+  dplyr::select('Age','Group')
+
+# select some column by index 
+sp %>% 
+  dplyr::select(c(2,4))
+
+# use select and filter at the same time
+sp %>% 
+  dplyr::select(c(1,2,4)) %>% 
+  dplyr::filter(Group %in% c('Med', 'Low'))
+```
+
+```{r}
+# gourp by Group
+grp_sp <- sp %>% group_by(Group)
+sp
+grp_sp
+grp_sp %>% summarise(sum(Income))
+```
+
+# Formating Results
+
+## Using kableExtra
+```{r}
+# Basic HTML table
+kbl(head(sp))
+
+# bootstrap theme
+sp %>%
+  head() %>%
+  kbl() %>%
+  kable_styling()
+
+# add caption
+sp %>%
+  head() %>%
+  kbl(caption = "Smartphone data table") %>%
+  kable_styling()
+
+
+# Try other themes by replacing the last line
+# kable_paper, kable_classic, kable_classic_2, kable_minimal, kable_material and kable_material_dark
+sp %>%
+  head() %>%
+  kbl(caption = "Smartphone data table", centering = T, align = c('r', 'r', 'r')) %>%
+  kable_classic(full_width = T, html_font = "Cambria")
+
+# Add more details
+sp %>%
+  head() %>%
+  kbl(caption = "Smartphone data table", centering = T, align = c('r', 'r', 'r')) %>%
+  kable_styling() %>%
+  add_header_above(c(" AIR " = 3, "Categorial" = 1))%>%
+  pack_rows(index = c("1-3" = 3, "4-6" = 3))
+
+# For pdf output
+# , format="latex"
+sp %>%
+  head() %>%
+  kbl(booktabs = TRUE, format="latex", escape = F, align = c('r', 'r', 'r'), 
+      col.names = c("","$\\Pi$", "$\\hat{a}$", "$R^2$")) %>%
+  kable_styling(latex_options = "striped", full_width = TRUE, font_size = 12)
+```
+
+
+## Figures
+
+### Figures for EDA
+
+```{r, warning=F, message=F}
+# Use the iris data in GGally
+iris%>%colnames()
+
+# # scatter plots
+# # Use geom_point
+# iris%>%
+#   filter(Species=="setosa")%>%
+#   ggplot(aes(x = Petal.Length, y = Petal.Width)) +
+#   geom_point()
+
+# iris%>%
+#   filter(Species=="setosa")%>%
+#   dim()
+# 
+# # Add transparency to show all points
+# iris%>%
+#   filter(Species=="setosa")%>%
+#   ggplot(aes(x = Petal.Length, y = Petal.Width)) +
+#   geom_point(alpha = 0.3, size = 2.0)
+# 
+# # Also can use geom_jitter to add random shift
+# iris%>%
+#   filter(Species=="setosa")%>%
+#   ggplot(aes(x = Petal.Length, y = Petal.Width)) +
+#   geom_jitter(width=0.05, height=0.05)
+# 
+# 
+# # Set colors for each group
+# iris%>%
+#   ggplot(aes(x = Petal.Length,
+#              y = Petal.Width,
+#              color = Species)
+#          ) +
+#   geom_jitter(width=0.05, height=0.05)
+# 
+# # Set different size by the sepal.length
+# iris%>%
+#   ggplot(aes(x = Petal.Length,
+#              y = Petal.Width,
+#              color = Species,
+#              size = Sepal.Length)
+#          ) +
+#   geom_jitter(width=0.05, height=0.05, alpha = 0.4)
+
+```
+
+
+
+```{r, warning=F, message=F}
+# # ggpairs: generalized pairs plot
+# ggpairs(iris)
+# 
+# # select columns and color by group
+# iris %>%
+#   ggpairs(columns = 1:4,      # Columns
+#         aes(color = Species,  # Color by group (cat. variable)
+#             alpha = 0.5))     # Transparency
+# 
+# # Figure for correlation matrix
+# # Use ggcorrplot
+# iris[,1:4]%>%
+#   cor()%>%
+#   ggcorrplot(hc.order=TRUE)
+# 
+# # Use corrplot
+# iris[,1:4]%>%
+#   cor()%>%
+#   corrplot()
+
+```
+
+
+
+### Figures for linear models
+```{r}
+# Recall the linear regression in last tutorial using smartphone data
+# lm_fit <- lm(Rating ~ Income, data = sp)
+
+# sp%>%
+#   ggplot(aes(x = Rating, y = Income, color = Group)) +
+#   geom_point() +
+#   geom_smooth(method = "lm", formula = "y~x")
+```
+
+
+# Logistic regression
+```{r}
+# Use the titanic data
+tit <- read.csv("titanicpassengers-bbm.dat")
+str(tit)
+tit$Passenger.Class <- factor(tit$Passenger.Class)
+tit$Port <- factor(tit$Port, levels = c("C","Q","S"))
+tit$Survived <- factor(tit$Survived)
+# glm() generalized linear model 
+## it requires y as a factor varaible
+```
+
+```{r}
+# check the missing value
+apply(tit, 2, function(x) sum(is.na(x)))
+
+# Remove the rolls with missing values
+# since we want to keep the age column
+tit.comp <- na.omit(tit) 
+```
+
+```{r}
+# fit a logistic regression with all variables without name and Home
+# use glm()
+fit_1.1 <- glm(Survived ~., data = tit.comp[,-c(1,10)], family = binomial(logit))
+summary(fit_1.1)
+```
+
+
+```{r}
+# fit a logistic regression with all variables without name, Fare, Parents and Home
+# use glm()
+fit_1.2 <- glm(Survived ~., data = tit.comp[,-c(1,7,8,10)], family = binomial(logit))
+summary(fit_1.2)
+
+```
+```{r}
+# Apply model selection by anova and Anova
+anova_out <- anova(fit_1.1, fit_1.2, test = "Chisq")
+Anova_out <- Anova(fit_1.1)
+anova_out
+```
+
+
+```{r}
+# conduct the final model
+fit_1_final <- glm(formula = Survived ~ Passenger.Class + Sex + Age + Siblings.and.Spouses + 
+    Port, family = binomial(logit), data = tit.comp[, -c(1, 10)])
+summary(fit_1_final)
+```
+```{r warning = FALSE}
+# Do prediction
+
+# Create your jack
+
+jack <- tit.comp[1,]
+jack[1,] <- c("Jack","",3,"male",17,0,"","","S","")
+jack$Age <- jack$Age %>% as.numeric()
+jack$Siblings.and.Spouses <- jack$Siblings.and.Spouses %>% as.numeric()
+
+# use predict()
+predict(fit_1_final, jack, type = "response")
+
+predict(fit_1_final, jack)
+
+logodd = predict(fit_1_final, jack)
+exp(logodd)/(exp(logodd)+1)
+```
+```{r, message=F}
+# Draw the ROC curve for the final model
+
+# roc_final <- roc(tit.comp$Survived, fit_1_final$fitted.values)
+
+# # plot the roc curve with ggroc
+
+# roc_final%>%
+#   ggroc(colour = 'steelblue', size = 2) +
+#   ggtitle(paste('ROC Curve ', '(AUC = ', round(roc_final$auc,4), ')'))
+```
+
+
+
+# Multinomial Logistic Regression
+
+
+```{r}
+# Y: n levels
+## n-1 logistics regressions
+## (n-1)*p parameters
+```
+
+## 
+```{r}
+
+# Use nnet to conduct Multinominal
+# multinominal regression <=> single hidden layer neural network activated by sigmoid function
+
+library(nnet)
+
+```
+
+## Nominal Response
+```{r}
+# Use WVS data from {carData}
+
+fit_mult <- multinom(poverty ~ ., data = WVS)
+str(WVS)
+summary(fit_mult)
+```
+
+```{r}
+Anova(fit_mult)
+```
+
+```{r warning = FALSE}
+# Create a new sample
+newdata <- WVS[1,]
+newdata[1,] <- c("", "yes", "yes", "USA", 18 , "female")
+newdata$age <- as.numeric(newdata$age)
+```
+
+```{r}
+# Prediction
+predict(fit_mult,newdata, type = "class")
+predict(fit_mult,newdata, type = "prob")
+```
+
+## Ordinal Response
+```{r}
+pacman::p_load(MASS)
+```
+
+```{r}
+# use polr to apply ordinal logistic
+fit_ord <- polr(poverty ~ ., data = WVS)
+summary(fit_ord)
+
+Anova(fit_ord)
+
+predict(fit_ord, newdata, type = "class")
+predict(fit_ord, newdata, type = "prob")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

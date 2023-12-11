@@ -1,0 +1,654 @@
+---
+title: "Case Study: Credit Prediction"
+author: 'MSBA7002: Business Statistics'
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+    keep_tex: yes
+    latex_engine: xelatex
+  word_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE, fig.width=9, fig.height=6)
+
+if(!require("pacman")){install.packages("pacman")}
+pacman::p_load(leaps,reshape,reshape2,dplyr,data.table,ggplot2,GGally,ISLR)
+```
+
+```{r include=FALSE}
+# Help function for us to choose variables of optimal model
+
+plot.which <- function(summary.fit, method = "Best Subset Selection", label = FALSE){
+  
+  
+  df.which <- summary.fit$which %>% reshape::melt()
+  colnames(df.which) <- c("Number","Variable","Kept")
+  df.which$Variable <- df.which$Variable %>% factor(levels = rev(df.which$Variable%>%unique()))
+  
+  df.which$opt <- "No"
+  df.which[df.which$Number==which.min(summary.fit$bic),"opt"] <- "BIC"
+  df.which[df.which$Number==which.min(summary.fit$cp),"opt"] <- "Cp"
+  df.which$opt <- df.which$opt %>% factor(levels = c("No","BIC","Cp"))
+  
+  df.txt <- df.which[df.which$opt!="No",]
+  df.txt <- df.txt[-(1:(dim(df.txt)[1]-2)),]
+  
+  p <- ggplot(df.which,aes(x = Number, y = Variable)) +
+    theme(panel.grid.major =element_blank(), 
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black")) +
+    ylab("Variable") + xlab("Number of Variables Kept") + 
+    scale_fill_manual(values=c("#99CCFF", "#006699")) +
+    guides(color = FALSE)
+  
+  if (label == TRUE){
+    p <- p + geom_tile(aes(fill = Kept,color=opt),width = 0.95, height = 0.95, size = 1) +
+      scale_color_manual(values=c("#FFFFFF","#FF66CC","#FF0000")) +
+      ggtitle(paste0(method)) +
+      geom_text(data=df.txt,aes(x=Number,y=Variable,label=opt))
+  } else{
+    p <- p + geom_tile(aes(fill = Kept), color="#FFFFFF",width = 0.95, height = 0.95, size = 1) +
+      ggtitle(paste0(method))
+  }
+  return(p)
+}
+```
+
+\pagebreak
+
+## Introduction
+
+Read:
+
+* Chapter 6.1 and 2.2.1-2.2.2
+
+Objectives:
+
+1. Exploratory Data Analysis (EDA)
+    + Abnormality (missing data, outliners, etc.)
+    + Pairwise scatter plots
+    + Correlation tables
+    + Correlation heat-map
+    + **Candidate variables and possible new variables**
+    
+2. Criterion of accuracy 
+    + **Prediction Error**
+        +  Cp: Mallows's Cp
+    + **Other targets** 
+        + AIC: Akaike Information Criterion
+        + BIC: Bayesian Information Criterion 
+
+3. Model Building
+    + All subset
+    + Forward Selection
+    + Backward Selection
+    + Model Diagnostics
+    
+4. Findings and Reports
+    + Final Report
+
+\pagebreak
+
+## Case Study: Credit Prediction
+
+- We will use ISLR's credit card balance data named `Credit`.
+- Credit: 12 variables about customers, including Income, Credit limit, and so on.
+
+**Goal of the study:**
+
+* How to use subset selection method to choose a optimal model?
+
+* We would like to use customer information to predict which customers will default on their credit card debt.
+
+
+## 1. Exploratory Data Analysis (EDA)
+
+As good Data Scientists, we must always first look at the data to identify potential problems. Here are some  main things that you should be in the lookout for:
+
+* Do we have a set of sensible variables?
+* Abnormality in the data
+* Make a set of candidates to be chosen from
+  - make new variables
+  - transformations on some variables
+
+Additionally, just by looking at the data, we might gain significant insights for decision making. Finally, it's easier for managers to understand plots than to understand p-values, and doing Exploratory Data Analysis (EDA) is a great way to practice producing meaningful plots!
+
+### Take a quick look at the data
+
+Pull out the information about the data: `Credit` is packaged in `ISLR`
+
+```{r include=FALSE}
+help(Credit)
+```
+
+How many customers (observations) and variables are contained in the data-set?
+```{r}
+dim(Credit)
+```
+
+We have 400 customers (observations) and 12 variables.
+
+Variable names
+```{r}
+names(Credit)
+```
+
+Structure of the data
+```{r}
+str(Credit)  
+```
+
+See the first 10 rows of the data
+
+```{r}
+head(Credit,10)
+```
+
+Let's see if we have any missing values. This data doesn't contain any missing values. It is great!
+```{r}
+sum(is.na(Credit))
+```
+
+We copy the data out of `ISLR` and  remove `ID` first.
+
+```{r}
+data.crd <- copy(Credit)
+data.crd <- data.crd[,-1]
+```
+
+\pagebreak
+
+### Pairwise scatter plots
+
+Let's now take a quick look at the pairwise relationship. 
+
+First, we will use `dplyr` to filter the non-numeric columns.  Then we will feed the output into our `ggpairs` function to produce the paired scatter-plots.
+
+**WARNING: Running the pairwise scatter plots will take a while if you have many variables.**
+
+```{r warning = F}
+data.crd %>%
+  select_if(is.numeric)  %>% 
+  ggpairs(progress = FALSE)
+```
+
+\pagebreak
+
+### Correlation tables
+
+Let's look at the pairwise correlations among all quantitative variables. This will tell us which variable is highly correlated with the response and with each other.
+```{r}
+# pairwise cor's among all quantitative var's
+data.crd %>%
+  select_if(is.numeric)  %>% 
+  cor()
+```
+
+\pagebreak
+
+### Correlation heatmap
+
+We can display the correlation table through a correlation heat-map.
+
+```{r, warning=FALSE}
+ggplot(data = data.crd %>% select_if(is.numeric) %>% cor() %>% reshape2::melt(),
+        aes(x = Var1 ,y = Var2, fill = value)) +
+  geom_tile(color="white",size=0.1) +
+  xlab("") +
+  ylab("") +
+  guides(fill = guide_legend(data.crdle = "Correlation")) +
+  scale_fill_gradient( low = "#56B1F7", high = "#132B43") +     #lightblue to darkblue
+  theme(axis.text.x = element_text(angle = 25, hjust = 1))
+```
+
+\pagebreak
+
+We next rearrange the heat-map by sorting the cor(Balance, variables) in a decreasing order and also control the intensity from low (lighter blue) to high (darker blue).
+
+```{r warning = F, echo = F}
+data.comp.numeric <- data.crd %>% select_if(is.numeric)
+corr.table <- data.comp.numeric %>% cor() %>% reshape2::melt()
+corr.table.salary <- corr.table %>% filter(Var2 == "Balance")
+col.order <- order(corr.table.salary$value)
+data.comp.numeric.2 <- data.comp.numeric[, col.order]
+
+ggplot(data = data.comp.numeric.2 %>% cor() %>% reshape2::melt(),
+        aes(x = Var1,y = Var2, fill = value)) +
+  geom_tile(color="white",size=0.1) +
+  xlab("") +
+  ylab("") +
+  guides(fill = guide_legend(title = "Correlation")) +
+  scale_fill_gradient( low = "#56B1F7", high = "#132B43") +     #lightblue to darkblue
+  theme(axis.text.x = element_text(angle = 25, hjust = 1))
+```
+
+\pagebreak
+
+## 2. Criteria
+
+We do not do model selection if we can avoid it. For example if there is solid science behind a model we may only need to estimate some unknown parameters.  
+
+Given a set of $p$ predictors, there will be $2^p$ (In this case there are $2^{10}$ = 1024) models.  
+
+Goal: build a parsimonious (simple) model which predicts the response as "accurately" as possible.  **But how do we define accuracy?**
+
+* If we use $RSS$ as a criterion, then the best model would be using all variables! **Do you remember why?**
+
+```{r}
+fit0 <- lm(Balance~.,data.crd)
+summary(fit0)
+```
+
+Remarks:
+
+1. It is hard to interpret the model due to collinearity.
+2. However, we can still use this model to do prediction.
+3. Would the model with all the predictors whose `p-value` < .05 be the "best" one?
+
+**Answer: Not necessarily the case!**
+
+\pagebreak
+
+###  Criterion of accuracy 
+
+Most often a model whose prediction error is small tends to also return a set of reasonable variables. By prediction error we mean:
+
+$$ \text{Prediction Error} =  E(y- \hat y_x)^2 $$
+The above is the sum of prediction errors for all the $x_i's$ in our data.
+
+#### 1. Mean Squared Error (MSE)
+
+$$MSE = \frac{1}{n} \sum_{i=1}^{n} (\hat{y_i} - {y_i})^{2}$$
+MSE is simple but it does not give us a good estimator for Prediction Error
+
+#### 2. Mallows's (Cp)
+
+
+$$C_p=\frac{1}{n}(RSS+2d\cdot \hat{\sigma}^2)$$
+
+Note:
+
+1. $d$: Number of the predictors in the model
+
+2. $n$: Number of the observations in the dataset
+
+3. $\hat{\sigma}^2$: Mean Squared Error (MSE) from the full model
+
+**Fact:** If the full model is true, $C_p$ is an unbiased estimator of average prediction errors, namely $\frac{1}{n} \sum_{i=1}^{n} E(y_i|x_i - \hat y_i)^2$ (differ by some fixed quantity). 
+
+4. $C_p$ might be defined differently, but it will not affect the final model chosen. 
+
+5. $C_p$ will not always decrease as a function of d! 
+
+6. We may choose a model with smallest (or nearly smallest) $C_p$.
+
+
+### Other criteria
+
+#### 1. Akaike Information Criterion (AIC)
+
+$$AIC=2k-2\ln(\hat{L})$$
+
+* $k$: Number of estimated parameters
+* $\hat{L}$: maximum value of the likelihood function for the model
+* It is equivalent to $C_p$ in this setup.
+* Notion of likelihood function
+
+#### 2. Bayesian Information Criterion (BIC)
+
+$$BIC=\ln(n)k-2\ln(\hat{L})$$
+
+* $k$: Number of free parameters to be estimated
+* $n$: Number of the observations in the dataset
+* $\hat{L}$: maximum value of the likelihood function for the model
+* It tends to output smaller models
+* The `leaps` package outputs an alternative form of $BIC$
+
+\pagebreak
+
+## 3. Model Building
+
+### All Subsets
+
+1. Given a model size $d$, find the one with min RSS, then compute its $Cp$.
+2. Min $Cp$ (or $BIC$) to obtain the final model or use elbow rule!
+3. Elbow: the point where the scree plot is leveling off. 
+4. Package `leaps`: `regsubsets()` does the job
+
+#### Regsubsets
+Let's now try to select a good model.  We will use the library `leaps`, which gives us model selection functions. It will output the best submodel within each model size together with `rsq`, `rss`, `adjr2`,  `cp` and `bic`. 
+
+All subset selection: for each model size, report the one with the smallest RSS. 
+
+Pro: identify the "best" model. 
+
+Con: computation expensive.  In our example: $2^{10}$=1024 models.
+
+```{r}
+fit.exh <- regsubsets(Balance ~., data.crd, nvmax=11, method="exhaustive")
+```
+
+The default settings:
+
+* nvmax=8  
+* method=c("exhaustive", "backward", "forward", "seqrep"),  "exhaustive" is the default setting.
+* nbest=1: output candidate models whose RSS's are similar.
+
+```{r}
+names(fit.exh)
+```
+
+List the model with the smallest RSS among each size of the model
+```{r}
+summary(fit.exh)
+```
+
+```{r}
+f.e <- summary(fit.exh)
+names(f.e)
+```
+
+\pagebreak
+
+Let's look at the `which` table
+```{r}
+f.e$which
+```
+The row indicates the number of variables in the model with the smallest RSS. For example, if we want the best model with only one variable, then `Rating` is the best predictors. For two variables, `Rating` and `Income` are the best predictors.
+
+\pagebreak
+We can see the value for each selection criterion.  For example, let's look at $R^2$
+```{r}
+data.frame(variables=(1:length(f.e$rsq)), r_squared=f.e$rsq)
+```
+Notice that as we increase the number of variables, $R^2$ increases.  Let's now look at all the criterion options.
+
+```{r}
+data.frame(variables = (1:length(f.e$rsq)),
+           r_squared = f.e$rsq,
+           rss = f.e$rss,
+           bic = f.e$bic,
+           cp = f.e$cp)
+```
+
+Regardless which criterion to be used, given a fixed number of predictors, we will have the same set of covariates which achieves the min value of `RSS`. 
+
+```{r}
+coef(fit.exh, 6)
+```
+
+```{r}
+coef(fit.exh,7)
+```
+
+\pagebreak
+
+#### Compare different criterion
+
+Let's compare the different criteria.
+```{r}
+par(mfrow=c(2,1), mar=c(2.5,4,0.5,1), mgp=c(1.5,0.5,0))    
+plot(f.e$rsq, xlab="Number of predictors", ylab="R-square", col="red", type="p", pch=16)
+plot(f.e$rss, xlab="Number of predictors", ylab="RSS", col="blue", type="p", pch=16)
+```
+
+As expected $R^2$ increases as $d$ increases.  $R^2$ or $RSS$ will not be good criteria to use in order to find a model which has the least average prediction squared error.  $Cp$ or $BIC$ will be used.
+
+\pagebreak
+
+Here are the plots of $Cp$ vs number of predictors.  Similarly we have the plots of $BIC$ vs number of the predictors.
+
+```{r}
+par(mfrow=c(3,1), mar=c(2.5,4,0.5,1), mgp=c(1.5,0.5,0))     # Compare different criteria 
+plot(f.e$cp, xlab="Number of predictors", 
+     ylab="cp", col="red", type="b", pch=20)
+plot(f.e$bic, xlab="Number of predictors", 
+     ylab="bic", col="blue", type="b", pch=20)
+plot(f.e$adjr2, xlab="Number of predictors", 
+     ylab="adjr2", col="green", type="b", pch=20)
+```
+
+Notice that the final model can be different in terms of the number of predictors depending on which criterion to use.  $BIC$ tends to give a model with the least number of predictors.  In this case we may use five-variable models.
+
+\pagebreak
+
+#### Optimal Model by Cp
+
+
+Let's locate the optimal model size by $Cp$.
+```{r}
+opt.size <- which.min(f.e$cp)
+opt.size
+```
+
+Now we look for the optimal variables selected
+```{r}
+fit.exh.var <- f.e$which # logic indicators which variables are in
+fit.exh.var[opt.size,]  #fit.exh.var[5,] 
+```
+
+```{r}
+colnames(fit.exh.var)[fit.exh.var[opt.size,]] # pull out the variable names
+```
+
+\pagebreak
+
+```{r}
+fit.final <- lm(Balance ~ Income + Limit + Rating + Cards + Age + Student, data.crd)    
+# Student has two levels, so Student is same as StudentYes
+summary(fit.final)
+```
+
+Note: there is no guarantee that all the var's in the final model are significant at $\alpha =.05$ say.
+
+When `d` is too large or in the situation `d` is even larger than `n`, it is impossible to search all subsets to find the least `RSS` model for each given number of predictors.  One possibility is through `Forward Selection`.
+
+Finally, we use ANOVA test to check whether this model is suitable.
+
+```{r}
+anova(fit.final,fit0)
+```
+
+\pagebreak
+
+### Forward Selection
+
+```{r}
+fit.forward <- regsubsets(Balance ~., data.crd, nvmax=11, method="forward")
+f.f <- summary(fit.forward)
+f.f
+```
+
+For any fixed number, the model selected from `All Subset Selection` will have larger $R^2$ (or smaller $RSS$) than that from `Forward Selection` and **WHY?**
+
+```{r, eval=F}
+plot(f.f$rsq, ylab="rsq", col="red", type="b", pch=16,
+     xlab="Forward Selection")
+lines(f.e$rsq, ylab="rsq", col="blue", type="b", pch=16,
+   xlab="All Subset Selection")
+```
+
+If we decided to use a model with 6 predictors by forward selection, here it is:
+```{r}
+coef(fit.forward, which.min(f.f$cp))
+```
+
+In this data, forward selection, with Mallow's Cp Criterion happens to select the same model as best subset selection does.
+
+### Backward Selection
+
+Especially useful when `p` is large (still smaller than `n`)!
+
+```{r}
+fit.backward <- regsubsets(Balance ~., data.crd, nvmax=11, method="backward")
+f.b <- summary(fit.backward)
+```
+
+```{r}
+coef(fit.backward, which.min(f.b$cp))
+```
+
+\pagebreak
+
+### Comparsion
+
+At any given number, the predictors selected may vary depending on the selection method. 
+
+**Exhaustive**
+
+```{r echo=FALSE, results= 'asis', warning = F}
+plot.which(f.e,method = "Best Subset Selection", label = TRUE)
+```
+
+4 Variables: `Income`, `Limit`, `Cards`, `Student`
+
+\pagebreak
+
+**Forward Selection**
+
+```{r echo=FALSE, results= 'asis', warning = F}
+plot.which(f.f,method = "Forward Selection",label = TRUE)
+```
+
+4 Variables: `Income`, `Limit`, `Rating`, `Student`
+
+Notice that Exhaustive and Forward selection give us different variables when we look for the best 4 variables.
+
+\pagebreak
+
+**Backward Selection**
+
+```{r echo=FALSE, results= 'asis', warning = F}
+plot.which(f.b,method = "Backward Selection",label = TRUE)
+```
+
+4 Variables: `Income`, `Limit`, `Cards`, `Student`
+
+\pagebreak
+
+**Remark:** Let's compare three selection methods. Can you tell for sure at a given d which method will give the least Mallow's Cp value?
+
+```{r}
+res.cp <- data.frame(number = 1:11, exhaustive = f.e$cp, forward = f.f$cp, backward = f.b$cp)
+res.cp <- reshape::melt(res.cp,id.vars = "number")
+colnames(res.cp) <- c("number","method","Cp")
+ggplot(res.cp, aes(x = number, y = Cp)) +
+  geom_point(aes(col=method))
+```
+
+\pagebreak
+
+## 4. Findings and Reports
+
+### Final model
+
+Here we use final model selected by best subset selection.
+
+```{r}
+fit.final <- lm(Balance ~ Income + Limit + Rating + Cards + Age + Student, data.crd)    
+summary(fit.final)
+```
+
+\pagebreak
+### Final Report
+
+1. Collectively the five features: Income, Limit, Cards, StudentYes do a good job to predict `Balance`.
+2. Interpret each LS estimates of the coefficients
+3. We may want to estimate the mean balance or individual balance.  For example for one with the following predictor values:
+
+Income = 50, Limit = 4000, Rating = 500, Age = 25, Cards = 2, Student = Yes
+
+  a) We first make a dataframe:
+
+```{r}
+customer <- data.crd[1,] # Get the right format and the variable names
+customer[1,] <- rep(NA,11)
+customer$Income <- 50
+customer$Limit <- 4000
+customer$Rating <- 500
+customer$Age <- 25
+customer$Cards <- 2
+customer$Student <- as.factor("Yes")
+customer
+```
+
+\pagebreak
+
+  b) Get a 95% CI for the mean balances for all such customers
+
+```{r}
+customer.m <- predict(fit.final, customer, interval="confidence", se.fit=TRUE) 
+customer.m
+```
+
+  c) Get a 95% Prediction Interval of the balance for the customer
+  
+```{r}
+customer.c <- predict(fit.final, customer, interval="prediction", se.fit=TRUE) 
+customer.c
+```
+
+### Summary
+
+1. You should always do EDA.  By looking at your data, you might be able to identify some candidate variables and to find problems such as colinearity, non-linearity, missing data, and outliers.  If you identify any problem, and fix it, your model will improve.  `Pairwise scatter plots`, `Correlation heatmaps`, and `Correlation tables` are very useful in EDA.
+
+2. There are different criteria for measuring how good a `fit` is. We recommend to use `Cp` and `BIC`. We will introduce more methods later.
+
+3. When building a model, you can use All Subsets, which searches for all possible combinations. When you have many variables, this is computationally expensive.  You have two other options: Forward and Backward Selection. They each have their advantages and disadvantages.
+
+4. After building your model, you should always run model diagnostics to identify issues such as: auto-correlated residuals, violations of normality or equal variance of residuals.  If you find any of these problems, it's very likely that you might need to do some variable transformation. Before writing a report, make sure that the model makes sense to you. 
+
+\pagebreak
+
+## 4. Appendix
+
+### Appendix I: Starting with a collection of predictors
+
+1. If you want to only start with a collection of predictors, you may use the usual formula: $y =x_1+x_2$ inside the regsubsets. For example if you only want to search a best model using Limit, Rating, Cards, Age, Student and log(Income), you may do the following:
+
+```{r}
+summary(regsubsets(Balance ~ Limit + Rating + Cards + Age + Student + log(Income), data.crd))
+```
+
+\pagebreak
+
+### Appendix II Restricting size of possible models
+
+2. We could also restrict the maximum possible model size so that we only search the best models up to `nvmax`. This is useful when `p` is large!
+
+```{r}
+summary(regsubsets(Balance ~ ., data.crd, nvmax=5, method="exhaustive")) 
+#We restrict a model with no more than nvmax=5 variables.
+```
+
+\pagebreak
+
+### Appendix II `force.in`
+
+3. Sometimes, we want to build model based on some already selected variables. Hence, we use `force.in` to force some variables in the model
+
+```{r}
+colnames(data.crd)[8]
+```
+
+```{r}
+fit.force.in <- regsubsets(Balance ~., data.crd, nvmax=11, method="forward", force.in=8+1)  
+
+# We need to specify the index. Note: the first one is the intercept.
+summary(fit.force.in)
+```
+
+Notice that `Student` is forced to be in the model now.

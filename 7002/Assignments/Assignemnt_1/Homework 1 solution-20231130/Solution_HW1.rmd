@@ -1,0 +1,592 @@
+---
+title: "Solution_HW1"
+author: 'MSBA7002: Business Statistics'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+    number_sections: true
+  rmdformats::readthedown:
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    highlight: tango
+    toc_depth: 4
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: spacelab #yeti #spacelab #simplex #readable #paper #flatly #cosmo #lumen
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    number_sections: true
+abstract: "The homework solutions contain a continued effort from the MSBA7002 TAs and instructors^[We would like to thank Jianlong Shao for providing the first version of the solution and for his great contributions to the class]. You should compare the solutions with your own homework submission to see how you can better improve your analytical skills. Please **do not redistribute the document or put it online** to hurt other students' learning experience."
+---
+<style>
+  p{
+    font-size:16px;
+    line-height:1.5em;
+    text-indent:35px;
+  }
+</style>
+
+\pagebreak
+
+
+
+# Manager Rating
+
+**Sol:**
+
+$$
+\left\{\begin{array}{rl}
+	\beta_0 &= \alpha_0 - \alpha_1 \\
+	\beta_1 &= 2\alpha_1 \\
+	\beta_2 &= \alpha_2 - \alpha_3 \\
+	\beta_3 &= 2\alpha_3 \\
+	\end{array}              
+	\right.
+$$
+
+$$
+\left\{\begin{array}{rl}
+	\alpha_0 &= \beta_0 + \frac{1}{2}\beta_1 \\
+	\alpha_1 &= \frac{1}{2}\beta_1 \\
+	\alpha_2 &= \beta_2 + \frac{1}{2}\beta_3 \\
+	\alpha_3 &= \frac{1}{2}\beta_3 \\
+	\end{array}              
+	\right.
+$$
+
+\pagebreak
+# Production Time Run
+
+\textcolor{blue}{ProdTime.dat contains information about 20 production runs supervised by each of three managers. Each observation gives the time (in minutes) to complete the task, Time for Run, as well as the number of units produced, Run Size, and the manager involved, Manager. }
+```{r include = F}
+pacman::p_load(ggplot2)
+```
+
+```{r}
+df.ptr <- read.csv('ProdTime.dat')
+str(df.ptr)
+```
+
+```{r}
+# delete missing value
+df.ptr <- na.omit(df.ptr)
+```
+
+Open Answer, Either Manager B or C perform the best is correct.
+
+We could compare the performance of manager from either aspect below. But the second one seems better.
+
+\pagebreak
+
+(i) Compare the performance of manager from `Run.size` ~ `Time.for.run`
+```{r}
+fit.ptr1 <- lm(Run.Size ~ Time.for.Run + Manager, data = df.ptr)
+summary(fit.ptr1)
+```
+
+```{r echo = T, warning = F, fig.width=6, fig.height=4}
+ggplot(data = df.ptr, aes(x = Time.for.Run, y = Run.Size, color = Manager, fill = Manager)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = "y~x")
+```
+
+\pagebreak
+
+(ii) Compare the performance of manager from `Time.for.run` ~ `Run.size`. This model seems making more sense as we hope to know given a task, i.e. the number of units produced, how long does it take for the manager to complete the task. 
+
+```{r}
+fit.ptr2 <- lm(Time.for.Run ~ Run.Size + Manager, data = df.ptr)
+summary(fit.ptr2)
+```
+
+```{r echo = T, warning = F, fig.width=6, fig.height=4}
+ggplot(data = df.ptr, aes(x = Run.Size, y = Time.for.Run, color = Manager, fill = Manager)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = "y~x")
+```
+
+From the above plot, the slope looks different for Manager b and c. So we can also consider adding the interaction term.
+
+```{r}
+fit.ptr3 <- lm(Time.for.Run ~ Run.Size * Manager, data = df.ptr)
+summary(fit.ptr3)
+```
+
+With the above model, we conclude that when `Run.Size` is small, Manager c is better than both Manager a and b (since $0 > -16.04 > -52.79$). As `Run.Size` becomes larger, the effect of the dummy variable `Managerb` decreases with slope $-0.17$. However, since the effect of the dummy variable `Managerc` barely change with `Run.Size` (the interaction of `Run.Size` and `Managerc` is not significant). Therefore, when `Run.Size` is large, the advantage of Manager c over Manager b becomes less significant, although they both still perform better than Manager a.
+
+
+
+
+
+
+
+
+\pagebreak
+
+# Auto Data from ISLR
+
+##
+\textcolor{blue}{
+Explore the data, with particular focus on pairwise plots and summary statistics. Briefly summarize your findings and any peculiarities in the data.}
+
+```{r include = FALSE}
+pacman::p_load(GGally,corrplot,dplyr,car)
+```
+
+```{r}
+auto_data<-ISLR::Auto
+str(auto_data)
+summary(auto_data)
+```
+
+\pagebreak
+
+```{r, echo = T}
+pairs(auto_data[,-c(2,7,8,9)], pch = 19)
+```
+
+There may be potential outliers, let us remove them. 
+
+\pagebreak
+
+```{r}
+# remove the potential outlier
+auto_data = auto_data[!((auto_data$horsepower>200) & (auto_data$weight<3500)),]
+auto_data = auto_data[!((auto_data$mpg>30) & (auto_data$displacement>250)),]
+pairs(auto_data[,-c(2,7,8,9)], pch = 19)
+```
+
+
+\pagebreak
+
+Horsepower, weight and acceleration have strong correlation. Since fewer accelerate time and
+larger vehicle weight will need more horsepower to run, it might be horsepower ~ weight/acceleration.
+
+```{r echo = T}
+auto_cor <- cor(auto_data[sapply(auto_data, is.numeric)])
+corrplot(auto_cor, order = "FPC")
+```
+
+\pagebreak
+
+From the plot below, we can see this presumption holds true. Hence, further adjustment is needed if a linear regression model contains all of them.
+
+```{r echo = T}
+auto_data %>%
+  select(weight, acceleration, horsepower) %>%
+  ggpairs()
+```
+
+\pagebreak
+
+Weight has positive correlation with cylinders and displacement. Obviously, a vehicle with more
+cylinders weighs heavier. Hence, it makes more sense to use weight.avg to represent the vehicle weight per cylinder. To justify this transformation, the corrplot of weight, cylinders and weight.avg is shown below. The correlation still exists, but not as significant as before.
+
+```{r echo = T}
+auto.tf <- data.frame(auto_data)
+auto.tf['weight.avg'] <- with(auto.tf, weight/cylinders)
+auto.tf %>%
+  select(weight, weight.avg, cylinders) %>%
+  ggpairs()
+```
+
+\pagebreak
+Displacement is correlatetd to cylinders postively. displacement represents the total swept volume inside cylinders. Hence, it makes more sense to use “disp.avg” to represent the swept volumn per cylinder. From the plot below, we can see the correlationship still exists, hence we may want to condition on cylinders to see the categorical effect of the number of the cylinders.
+
+```{r echo = T}
+auto.tf['disp.avg'] <- with(auto_data, displacement/cylinders)
+auto.tf %>%
+  select(displacement, disp.avg, cylinders) %>%
+  ggpairs()
+```
+
+\pagebreak
+The corrplot with transformed variables is presented below
+
+```{r echo = T}
+auto.tf %>%
+  select(mpg, cylinders, disp.avg, weight.avg, acceleration,
+year, origin) %>%
+  cor() %>%
+  corrplot(order = "FPC")
+```
+
+Except for mpg, the coliearity among all other variables seems improved. year, origin and cylinders are going to be conditioned on later, because they are discrete values and have strong correlationship with other factors.
+
+\pagebreak
+##
+
+\textcolor{blue}{What effect does time have on MPG?}
+
+###
+\textcolor{blue}{Start with a simple regression of `mpg` vs. `year` and report R's `summary` output. Is year a significant variable at the .05 level? State what effect year has on mpg, if any, according to this model.}
+
+```{r}
+fit_3.2.1 <- lm(mpg~year, data = auto_data)
+summary(fit_3.2.1)
+```
+
+That the coefficient of year is 1.22, **significant** at 0.05 level. This coefficient shows that year has a positive marginal effect on mpg. R2 of regressing mpg on year is 33.1\%. 
+
+\pagebreak
+
+###
+\textcolor{blue}{Add horsepower on top of the variable year. Is year still a significant variable at the .05 level? Give a precise interpretation of the year effect found here.} 
+
+```{r}
+fit_3.2.2 <- lm(mpg ~ year + horsepower, data = auto_data)
+summary(fit_3.2.2)
+```
+
+The coefficient of year in this model is 0.65, **significant** at 0.05 level. The coefficient of year show that year has a positive **partial effect** on mpg, given a constant horsepower.
+
+Interpretation: Given a constant horsepower, the expectation of mpg will increase 0.65 unit if the year increases one unit,
+
+\pagebreak
+**Diagnose**
+
+```{r echo = T}
+par(mfrow = c(2,2),mgp = c(1.5,0.5,0))
+plot(fit_3.2.2)
+```
+
+
+\pagebreak
+###
+\textcolor{blue}{The two 95\% CI's for the coefficient of year differ among i) and ii). How would you explain the difference to a non-statistician?}
+
+```{r}
+CI_3.2.3 <- data.frame(a = c(confint.lm(fit_3.2.1)[2,1],confint.lm(fit_3.2.2)[2,1]),
+                       b = c(confint.lm(fit_3.2.1)[2,2],confint.lm(fit_3.2.2)[2,2]),
+                       c = c('Marginal effect','Partial effect'))
+colnames(CI_3.2.3) <- c('2.5% CI','97.5% CI','Reason for difference')
+rownames(CI_3.2.3) <- c('Model without horsepower','Model with horsepower')
+CI_3.2.3
+```
+
+The coefficients of year in two model should be different, since the coefficient of model one measures marginal effect of year on mpg and the coefficient of model measures partial effect.
+
+\pagebreak
+###  
+\textcolor{blue}{Do a model with interaction by fitting `lm(mpg ~ year * horsepower)`. Is the interaction effect significant at .05 level? Explain the year effect (if any).} 
+
+```{r}
+fit_3.2.4 <- lm(mpg ~ year * horsepower, data = auto_data)
+summary(fit_3.2.4)
+```
+
+The coefficient of interaction term is $-1.565 * 10^{-2}$, significant at 0.05 level. The marginal effect of year on mpg is $2.155 - 1.565 * 10^{-2} * horsepower$.
+
+
+
+\pagebreak
+##
+
+\textcolor{blue}{Note that the same variable can play different roles! Take a quick look at the variable `cylinders`, try to use this variable in the following analyses wisely. We all agree that larger number of cylinder will lower mpg. However, we can interpret `cylinders` as either a continuous (numeric) variable or a categorical variable.}
+
+###
+
+\textcolor{blue}{i. Fit a model, that treats `cylinders` as a continuous/numeric variable: `lm(mpg ~ horsepower + cylinders, ISLR::Auto)`. Is `cylinders` significant at the 0.01 level? What effect does `cylinders` play in this model?}
+
+```{r}
+fit_3.3.1 <- lm(mpg ~ horsepower + cylinders, data = ISLR::Auto)
+summary(fit_3.3.1)
+```
+
+Cylinders is significant at the 0.01 level.
+Given horsepower is the same, `cylinders` plays a negative effect on `mpg`.
+
+\pagebreak
+###
+
+\textcolor{blue}{Fit a model that treats `cylinders` as a categorical/factor variable:  `lm(mpg ~ horsepower + as.factor(cylinders), ISLR::Auto)`. Is `cylinders` significant at the .01 level? What is the effect of `cylinders` in this model?}
+
+```{r}
+fit_3.3.2 <- lm(mpg ~ horsepower + factor(cylinders), ISLR::Auto)
+summary(fit_3.3.2)
+```
+
+The effect of cylinders in this model: cylinders4 has a significant estimator coeffiecient (6.573) at 0.01 level, which means that cylinders 4 has a positive effect on mpg compared with situation cylinders is equal to 3. However, cylinders5, cylinders6, cylinders8 don’t own a significant estimator.
+
+\pagebreak
+###
+\textcolor{blue}{What are the fundamental differences between treating cylinders as a numeric or a factor? Use `anova(fit1, fit2)` to help gauge the effect. Explain their difference.}
+
+```{r}
+fit_3.3.3 <- lm(mpg ~ horsepower, ISLR::Auto)
+```
+
+```{r}
+anova(fit_3.3.3,fit_3.3.1)
+anova(fit_3.3.3,fit_3.3.2)
+```
+
+Here we can see adding cylinders as a categorical variable gives extra 3 degrees of freedom, which means the model treat as.factor(cylinders) as 4 different variables (cylinders = 4, 5, 6, 8). From the result, we can see this improves the model fit significantly.
+Hence, we can interpret the second model lm.cl.cat includes 4 variables representing 5 types of cylinders besides year. Each kind of cylinder will have different effect on the fuel economy performance (mpg). The model fits better since the number of cylinders is not related to mpg monotonely.
+
+
+
+
+
+
+
+
+\pagebreak
+
+# Crime Data
+
+```{r include = FALSE}
+pacman::p_load(dplyr,ggplot2,glmnet,leaps,caret, pROC,bestglm,moments,ggpubr)
+```
+
+\textcolor{blue}{We use the crime data to study the prediction of the number of violent crimes (per population). We are going to mainly look at Florida and California. Note the following code:}
+
+```{r}
+crime <- read.csv("CrimeData_sub.csv", stringsAsFactors = F, na.strings = c("?"))
+crime <- na.omit(crime)
+```
+
+\textcolor{blue}{Our goal is to find the factors/variables  which relate to violent crime. This variable is included in crime as crime\$violentcrimes.perpop.}
+
+##
+
+\textcolor{blue}{Divide your data into 80\% training and 20\% testing. Run the ordinary least square regression with all the variables and with the training data. Get RMSE and R2 for both the training and testing data and see if there is a difference.}
+
+```{r}
+set.seed(20211001)
+ind <- sample(2, nrow(crime), replace = T, prob = c(0.8, 0.2))
+crime.train <- crime[ind==1,]
+crime.test <- crime[ind==2,]
+
+# this gives each data 80% probability to be in the training
+# but we do not exactly have 80% of data in the training
+# you can use a more exact way of selection 80% data as training, for example,
+# train_ind <- sample(nrow(crime), size = round(nrow(crime)*0.8))
+# crime.train <- crime[train_ind, ]
+# crime.test <- crime[-train_ind, ]
+
+# Dump everything in the model 
+fit.all <- lm(violentcrimes.perpop~., data=crime.train) 
+# in-sample performance
+predictions <- predict(fit.all, crime.train)
+data.frame(
+  RMSE = RMSE(predictions, crime.train$violentcrimes.perpop),
+  Rsquare = R2(predictions, crime.train$violentcrimes.perpop)
+)
+# out-of-sample performance
+predictions <- predict(fit.all, crime.test)
+data.frame(
+  RMSE = RMSE(predictions, crime.test$violentcrimes.perpop),
+  Rsquare = R2(predictions, crime.test$violentcrimes.perpop)
+)
+```
+
+The testing performance is much worse than the training performance, which indicates possible overfitting.
+
+
+
+\pagebreak
+##
+
+\textcolor{blue}{Use LASSO to choose a reasonable, small model. Fit an OLS model with the variables obtained. The final model should only include variables with p-values < 0.05. Note: you may choose to use lambda 1se or lambda min to answer the following questions where apply.} 
+
+###
+
+\textcolor{blue}{What is the model reported by LASSO? Use 5-fold cross-validation to select the tuning parameter.}
+
+Let us first try LASSO with a set of $\lambda$'s and look at the Lasso path.
+
+```{r}
+# create a matrix contain the whole predictors
+x.matrix <- model.matrix(violentcrimes.perpop~., data=crime.train)[, -1]
+violentcrimes.perpop <- crime.train[,103]
+
+fit.lasso.path <- glmnet(x.matrix, violentcrimes.perpop, alpha=1)
+```
+
+```{r echo = T, warning=FALSE}
+df.lasso <- fit.lasso.path$beta %>% as.matrix() 
+colnames(df.lasso) <- fit.lasso.path$lambda
+df.lasso <- df.lasso %>% reshape2::melt()
+colnames(df.lasso) <- c("Variables","lambda","Coefficients")
+
+p.lasso <- df.lasso %>%
+  ggplot(aes(x = lambda, y = Coefficients, color = Variables, shape = Variables)) +
+  geom_point() + scale_x_log10() +
+  scale_shape_manual(values=seq(0,dim(x.matrix)[2])) + 
+  ggtitle("Lasso: Lambda and Coefficients") + theme_classic() +
+  theme(legend.position="bottom") + theme(legend.title = element_blank()) +
+  theme(legend.text=element_text(size=5)) 
+
+p.lasso + theme(legend.position = "none")
+as_ggplot(get_legend(p.lasso))
+```
+
+We then use 5-fold CV to select the best $\lambda$. Note that given different seed, model selected will be different as CV folds will be defined differently.
+
+```{r}
+set.seed(20211001)
+fit.lasso <- cv.glmnet(x.matrix,violentcrimes.perpop,alpha = 1,nfolds = 5)
+
+coef.min <- coef(fit.lasso, s="lambda.min") 
+coef.min  <- coef.min[which(coef.min!=0),]
+
+var.min <- rownames(as.matrix(coef.min))
+lm.input <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min[-1], collapse = "+")))
+lm.input
+```
+
+
+
+\pagebreak
+
+###
+
+\textcolor{blue}{What is the model after refitting OLS with the selected variables? What are RMSE and R2 for the training and testing data? Compare them with results in Q4.2.}
+
+```{r echo = T}
+fit <- lm(lm.input, data = data.frame(violentcrimes.perpop = 
+                crime.train$violentcrimes.perpop, x.matrix))
+summary(fit)
+```
+
+\pagebreak
+
+Let us apply the model for training and testing performance evaluation using RMSE and R2.
+
+```{r}
+x.test <- model.matrix(violentcrimes.perpop~., data=crime.test)[, -1]
+# in-sample performance
+predictions <- predict(fit, data.frame(violentcrimes.perpop = 
+                crime.train$violentcrimes.perpop, x.matrix))
+data.frame(
+  RMSE = RMSE(predictions, crime.train$violentcrimes.perpop),
+  Rsquare = R2(predictions, crime.train$violentcrimes.perpop)
+)
+# out-of-sample performance
+predictions <- predict(fit, data.frame(violentcrimes.perpop = 
+                crime.test$violentcrimes.perpop, x.test))
+data.frame(
+  RMSE = RMSE(predictions, crime.test$violentcrimes.perpop),
+  Rsquare = R2(predictions, crime.test$violentcrimes.perpop)
+)
+```
+
+We see that although the in-sample/training RMSE and R2 are worse than OLS without variable selection, the out-of-sample/testing RMSE and R2 are actually better. This indicates that the new model is more reliable.
+
+\pagebreak
+###
+
+\textcolor{blue}{What is your final model, after excluding high p-value variables? You will need to use model selection method to obtain this final model. Make it clear what criterion/criteria you have used and justify why they are appropriate.} 
+
+We adopt best subset selection to select variables.
+```{r}
+regfit_exh <- regsubsets(lm.input,method = 'exhaustive', nvmax = length(var.min),
+                         data = data.frame(violentcrimes.perpop = crime.train$violentcrimes.perpop,
+                                      x.matrix))
+
+f.e <- summary(regfit_exh)
+var.min2 <- names(coef(regfit_exh,which.min(f.e$bic)))
+lm.input2 <- as.formula(paste("violentcrimes.perpop", "~", paste(var.min2[-1], collapse = "+")))
+```
+
+```{r}
+fit2 <- lm(lm.input2,data = data.frame(violentcrimes.perpop = crime.train$violentcrimes.perpop,
+                                      x.matrix))
+summary(fit2)
+```
+
+\pagebreak
+
+Let us apply the model for training and testing performance evaluation using RMSE and R2.
+
+```{r}
+# in-sample performance
+predictions <- predict(fit2, data.frame(violentcrimes.perpop = 
+                crime.train$violentcrimes.perpop, x.matrix))
+data.frame(
+  RMSE = RMSE(predictions, crime.train$violentcrimes.perpop),
+  Rsquare = R2(predictions, crime.train$violentcrimes.perpop)
+)
+# out-of-sample performance
+predictions <- predict(fit2, data.frame(violentcrimes.perpop = 
+                crime.test$violentcrimes.perpop, x.test))
+data.frame(
+  RMSE = RMSE(predictions, crime.test$violentcrimes.perpop),
+  Rsquare = R2(predictions, crime.test$violentcrimes.perpop)
+)
+```
+
+So both the training and testing RMSE and R2 are slightly worse compared to the refitted LASSO model. However, the model now is much more simple and parsimonious. By reducing a lot of unimportant variables, the model fit only gets worse a little bit. 
+
+
+\pagebreak
+###
+
+\textcolor{blue}{Try Ridge regression with 5-fold CV to select the tuning parameter. Compare its training and testing RMSE and R2 with the previous models.}
+
+Let us first try Ridge with a set of $\lambda$'s and look at the Ridge path.
+
+```{r}
+fit.ridge.path <- glmnet(x.matrix, violentcrimes.perpop, alpha=0)
+```
+
+```{r echo = T, warning=FALSE}
+df.lasso <- fit.ridge.path$beta %>% as.matrix() 
+colnames(df.lasso) <- fit.ridge.path$lambda
+df.lasso <- df.lasso %>% reshape2::melt()
+colnames(df.lasso) <- c("Variables","lambda","Coefficients")
+
+p.lasso <- df.lasso %>%
+  ggplot(aes(x = lambda, y = Coefficients, color = Variables, shape = Variables)) +
+  geom_point() + scale_x_log10() +
+  scale_shape_manual(values=seq(0,dim(x.matrix)[2])) + 
+  ggtitle("Ridge: Lambda and Coefficients") + theme_classic() +
+  theme(legend.position="bottom") + theme(legend.title = element_blank()) +
+  theme(legend.text=element_text(size=5)) 
+
+p.lasso + theme(legend.position = "none")
+as_ggplot(get_legend(p.lasso))
+```
+
+We then use 5-fold CV to select the best $\lambda$. 
+
+```{r}
+set.seed(20211001)
+fit.ridge.cv <- cv.glmnet(x.matrix,violentcrimes.perpop, alpha = 0,nfolds = 5)
+
+lambda.ridge <- fit.ridge.cv$lambda.min  # fit.ridge$lambda.1se
+
+fit.ridge <- glmnet(x.matrix, violentcrimes.perpop, 
+                    alpha=0,lambda=lambda.ridge)
+```
+
+\pagebreak
+
+Let us apply the model for training and testing performance evaluation using RMSE and R2.
+
+```{r}
+# in-sample performance
+predictions <- predict(fit.ridge, x.matrix) %>% as.vector()
+data.frame(
+  RMSE = RMSE(predictions, crime.train$violentcrimes.perpop),
+  Rsquare = R2(predictions, crime.train$violentcrimes.perpop)
+)
+# out-of-sample performance
+predictions <- predict(fit.ridge, x.test) %>% as.vector()
+data.frame(
+  RMSE = RMSE(predictions, crime.test$violentcrimes.perpop),
+  Rsquare = R2(predictions, crime.test$violentcrimes.perpop)
+)
+```
+
+The testing performance is the best among all the above models. However the model is quite dense and hard to interpret. 
+Whether Ridge and LASSO should be used in practice is a case-by-case decision. Elastic net which combines Ridge and LASSO could be another great choice. 
+
+
+

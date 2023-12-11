@@ -1,0 +1,217 @@
+---
+title: 'Case Study: Titanic Passengers'
+author: 'MSBA7002: Business Statistics'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE , fig.width=6, fig.height=4)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(bestglm, glmnet, leaps, car, tidyverse, mapproj, dplyr, GGally)
+```
+
+```{r include = FALSE}
+# Help function, to draw a beautiful ggpairs() plot without `binwidth` warning
+my_bin <- function(data, mapping, ..., low = "#132B43", high = "#56B1F7") {
+  ggplot(data = data, mapping = mapping) +
+    geom_bin2d(...) +
+    scale_fill_gradient(low = low, high = high)
+}
+```
+
+The sinking of the RMS Titanic is one of the most infamous shipwrecks in history. On April 15, 1912,
+during her maiden voyage, the Titanic sank after colliding with an iceberg, killing 1,502 of the 2,224
+passengers and crew. This sensational tragedy shocked the international community and motivated the
+adoption of better maritime safety regulations.
+
+One of the reasons that the shipwreck led to such loss of life was that there were not enough lifeboats for
+the passengers and crew. Although there was some element of luck involved in surviving the sinking,
+some groups of people were more likely to survive than others.
+
+We use this rich and storied example to explore some questions of interest about Titanic survival rates.
+For example, were there any key characteristics shared by survivors? Were some passenger groups
+more likely to survive than others? Can we accurately predict survival? 
+
+We will fit a logistic regression model using `titanicpassengers.dat` to explore these questions.
+
+The data describes the survival status of 1,309 of the 1,324 individual passengers on the Titanic. Information on the 899 crew members is not included. The variables are described below: 
+
+<center>
+|Feature|Description|
+|--|---|
+|Name|Passenger Name|
+|Survived|Yes or No|
+|Passenger Class|1, 2, or 3 corresponding to 1st , 2nd , or 3rd  class| 
+|Sex|Passenger gender|
+|Age|Passenger age|
+|Siblings and Spouses|The number of siblings and spouses aboard|
+|Parents and Children|The number of parents and children aboard|
+|Fare|The passenger fare|
+|Port|Port of embarkment (C=Cherbourg; Q=Queenstown; S=Southampton)|
+|Home/Destination|The home or final intended destination of the passenger|
+</center>
+
+\pagebreak
+## 1. A quick EDA
+
+Read `titanicpassengers-bbm.dat` as `tit`
+```{r}
+tit = read.csv('titanicpassengers-bbm.dat')
+str(tit)
+names(tit)
+summary(tit)
+```
+
+Change the type of `Passenger.Class`, `Sex`, `Survived` from int into factor
+```{r}
+tit$Survived <- as.factor(tit$Survived)
+tit$Passenger.Class <- as.factor(tit$Passenger.Class)
+tit$Sex <- as.factor(tit$Sex)
+str(tit)
+```
+
+Check the situation of missing value
+```{r}
+sum(is.na(tit))
+sapply(tit, function(x) sum(is.na(x)))
+```
+
+A look at relationship between Passenger Class and Survived.
+```{r}
+plot(tit$Passenger.Class, tit$Survived, ylab ="Survived", xlab = "Passenger Class", col = c('blue','red'))
+```
+
+A look at relationship between Sex and Survived.
+```{r}
+plot(tit$Sex, tit$Survived, ylab ="Survived", xlab = "Sex", col = c('blue','red'))
+```
+
+We can also use 'ggpairs' to check relationships among the response and the predictors.
+```{r, warning=FALSE}
+tit[,c(2:7,9)] %>%
+  ggpairs(progress=FALSE,lower=list(combo=wrap("facethist", binwidth=1), 
+                                    continuous=wrap(my_bin, binwidth=0.25)))
+```
+
+\pagebreak
+## 2. Multiple Logistic Regression
+
+To avoid problems, we will delete all cases with missing values.
+```{r}
+tit.comp <- na.omit(tit)
+```
+
+### a. With all the predictors
+
+#### i. Full Model
+```{r}
+fit1 <- glm(Survived~., tit.comp[,-c(1,10)], family=binomial(logit))
+summary(fit1)
+```
+
+\pagebreak
+#### ii. identify "problematic observations"
+
+From the output, the Port variable appears strange. 
+
+```{r}
+table(tit.comp$Port)
+```
+
+From the output we notice two observations with empty entries for Fort, but they are not treated as missing values. So we need to replace them with NA. 
+
+```{r}
+tit.comp$Port=factor(tit.comp$Port, levels=c("C","Q","S"))
+```
+
+Refit the full model, and notice the different outputs about Port.
+
+```{r}
+fit1 <- glm(Survived~., tit.comp[,-c(1,10)], family=binomial(logit))
+summary(fit1)
+```
+
+\pagebreak
+To delete the insignificant predictors `Parents.and.Children` and `Fare`.
+```{r}
+fit0 <- glm(Survived~., tit.comp[,-c(1,7:8,10)], family=binomial(logit))
+summary(fit0)
+```
+\pagebreak
+#### iii. Are Parents.and.Children and Fare needed?
+
+We can use the Likelihood Ratio test to see whether the variables are needed. The null hypothesis is that the smaller model is sufficient.
+
+```{r}
+anova(fit0,fit1,test="Chisq")
+```
+
+We can also calculate the Chi-square statistics directly.
+```{r}
+chi.sq.2 <- fit0$deviance-fit1$deviance
+chi.sq.2
+pchisq(chi.sq.2, 2, lower.tail=FALSE)
+```
+
+Both analyses suggest that we can use the smaller model. 
+
+\pagebreak
+### b. Final Model
+```{r}
+fit <- glm(Survived~., tit.comp[,-c(1,7:8,10)], family=binomial(logit))
+summary(fit)
+```
+
+Practice how to interpret the estimated coefficients as odds ratio.
+
+\pagebreak
+### c. Prediction
+
+Here we would like to predict the survival rate of Jack and Rose by using their information below:
+
+<center>
+|Name|Jack|Rose|
+|--|---|---|
+|Passenger Class|3|1|
+|Sex|male|female|
+|Age|17|20|
+|Siblings and Spouses|0|1|
+|Port|S|S|
+</center>
+
+```{r warning = FALSE}
+jack <- tit.comp[1,]
+jack[1,] <- c("Jack","",3,"male",17,0,"","","S","")
+jack$Age <- jack$Age %>% as.numeric()
+jack$Siblings.and.Spouses <- jack$Siblings.and.Spouses %>% as.numeric()
+jack
+```
+
+```{r}
+print(paste('Survival rate of Jack is',round(predict(fit,jack,type='response'),4)))
+```
+
+
+```{r warning = FALSE}
+rose <- tit.comp[1,]
+rose[1,] <- c("Rose","",1,"female",20,1,"","","S","")
+rose$Age <- rose$Age %>% as.numeric()
+rose$Siblings.and.Spouses <- rose$Siblings.and.Spouses %>% as.numeric()
+rose
+```
+
+```{r}
+print(paste('Survival rate of Rose is',round(predict(fit,rose,type='response'),4)))
+```

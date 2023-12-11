@@ -1,0 +1,666 @@
+---
+title: "Principal Component Analysis"
+author: 'MSBA7002: Business Statistics'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error = TRUE, fig.width=6, fig.height=4)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(glmnet, leaps, car, tidyverse, mapproj)
+
+library(psych) 
+library(dplyr)
+```
+\tableofcontents
+
+
+\pagebreak
+
+## PCA: Principal Component Analysis
+
+Chapter 6.3 and Chapter 12.1-12.3.
+
+0. Dimension reduction
++ capture the main features 
++ cut the noise hidden in the data
++ visualization of large dimension
+
+1. PC's interpretations
++ The best low dimension of linear approximation to the data (or closest to the data)
++ The direction of linear combination which has largest variance
++ We may take a small number of PC's as a set of input... to other analyses
+
+<!-- Table of contents -->
+
+<!-- + Part I:  ASVAB (Armed Services Vocational Aptitude Battery) tests -->
+<!-- + Part II: Major League Baseball performance/pay data revisit -->
+<!-- + Appendix: PCA insight: Eigen value decomposition -->
+
+
+
+
+
+## Part I: Case study: Measurement of Intelligence from ASVAB tests
+
+**Goal: How people differ in intelligence?**
+
++ Our data set IQ.csv is a subset of individuals from the 1979 National Longitudinal Study of Youth (NLSY79) survey who were re-interviewed in 2006. 
++ Information about family, personal demographic such as gender, race and eduction level, plus a set of ASVAB (Armed Services Vocational Aptitude Battery) test scores.
++ It is STILL used as a screening test for those who want to join the US army!
+
+**The test has the following components:**
+
++ Science, Arith (Arithmetic reasoning), Word (Word knowledge), Parag (Paragraph comprehension), Numer (Numerical operation), Coding (Coding speed), Auto (Automative and Shop information), Math (Math knowledge), Mechanic (Mechanic Comprehension) and Elec (Electronic information).
++ Lastly AFQT (Armed Forces Qualifying Test) is a combination of Word, Parag, Math and Arith.
++ Note: Service Branch requirement: Army 31, Navy 35, Marines 31, Air Force 36, and Coast Guard 45, (out of 100 which is the max!) My prediction is that all of us pass the requirements, even for Coast Guard. :)
+
+
+
+**Our goal** is to see how we can summarize the set of tests and grab main information about each one's intelligence efficiently.
+
+**Note:** One of the original study goals is to see how intelligence relates to one's future successes measured by income in 2005. 
+
+
+
+
+
+**0) Get a quick look at the data**
+```{r}
+data1 <- read.csv("IQ.Full.csv")
+#dim(data1)
+names(data1)
+#summary(data1)
+```
+
+**1) We first concentrate on the AFQT tests: Word, Math, Parag and Arith**
+
+
+
+**Question:** 
+
+i) How can we best capture the performance based on the four tests?
+
+ii) Can we come up with some sensible scores combining the four tests together?
+              
+              
+              
+**Note:**    
+
+ii) is similar to the creation of SP500, a weighted index based on 500 stocks. 
+
+
+
+For simplicity we take a subset of 50 subjects.
+```{r}
+set.seed(1)
+data.AFQT <- data1[sample(nrow(data1), 50, replace=FALSE), c("Word","Parag", "Math", "Arith")]
+#str(data.AFQT)
+summary(data.AFQT)
+```
+
+We expect the four test scores correlated each other.
+```{r}
+pairs(data.AFQT, pch=16, col="blue")   # shows pairwise relationship between two sets of scores
+
+#rownames(data.AFQT)  # label for each person
+rownames(data.AFQT) <-  paste("p", seq(1:nrow(data.AFQT)), sep="")  # reassign everyone's labels to be shorter.
+#rownames(data.AFQT)
+```
+
+**2) Scaling and centering variables**
+
+```{r}
+sapply(data.AFQT, sd)  # sd's for each test
+sapply(data.AFQT, mean) # means for each test
+#colMeans((data.AFQT))
+```
+
+```{r}
+# What are correlations?
+#var(data.AFQT)  # covariances
+cor(data.AFQT)
+```
+
+Each test score has its own variance. Sometimes the variables of interest may have different units. 
+We can center the mean to 0 and set the sd to 1 for each test by subtracting the score means and dividing the sd for each test. Then the cor and var will be the same.
+
+```{r}
+data.AFQT.scale <- scale(data.AFQT, center=TRUE, scale=TRUE)  #default
+#is.matrix(data.AFQT.scale) # it turns a data frame to a matrix
+```
+
+Now the mean of each test will be 0, and the var matrix will be same as the cor matrix.
+
+```{r}
+data.AFQT.scale <- as.data.frame(data.AFQT.scale)
+colMeans(data.AFQT.scale)  # all zeros
+sapply(data.AFQT.scale, sd)  # all 1's
+```
+
+```{r}
+# Now the var matrix and cor matrix are the same after scaled.
+var(data.AFQT.scale)
+#cor(data.AFQT.scale)
+#pairs(data.AFQT.scale, pch=16, col="blue")
+```
+
+
+
+**3) Principal Components: dimension reduction**
+
+i) For simplicity let's first look at one pair of the scores
+
+```{r}
+# Parag and Word
+par(mfrow=c(1,1))
+plot(data.AFQT$Parag, data.AFQT$Word, pch=16,
+     xlab="Parag",
+     ylab="Word",
+     xlim=c(0, 40), 
+     ylim=c(0, 40))
+```
+
+**Questions:**
+
+i) How can we use one score which combines both Parag and Word linearly, such that it will give us the largest variance?
+
+ii) Can we find a line which is closest to all the points? 
+
+
+
+This is equivalent to find $$\phi_{11}$$ and $$\phi_{21}$$ such that
+     $$Var(Z_1)= Var(\phi_{11}*X_1+  \phi_{21}*X_2)$$ is maximized with constraint $$\phi_{11}^2 + \phi_{21}^2 = 1$$
+
+**Here X1 and X2 are centered and scaled Parag and Word scores.**
+$$X_1=(Parg - mean(Parag))/sd(Parag)$$
+$$X_2=(Word - mean(Word))/sd(Word)$$
+
+
+```{r}
+attach(data.AFQT)
+mean(Parag)
+sd(Parag)
+mean(Word)
+sd(Word)
+
+X1=(Parag - mean(Parag))/sd(Parag) 
+X2=(Word - mean(Word))/sd(Word)
+
+# Same as
+# scale(data.AFQT[, c("Parag", "Word") ], center=TRUE, scale=TRUE) 
+# By default center=TRUE and scale=TRUE
+```
+
+```{r}
+plot(X1, X2, pch=16, xlim=c(-3, 3), ylim=c(-3, 3),
+     xlab="Parag centered and scaled",
+     ylab="Word centered and scaled" )
+abline(h=0, v=0, lwd=4)
+par(mfrow=c(1,1))     
+
+plot(X1, X2, pch=16, xlim=c(-3, 3), ylim=c(-3, 3),
+     xlab="Parag centered and scaled",
+     ylab="Word centered and scaled" )
+abline(0, 1, lwd=4, col="red")  
+abline(0, -1, lwd=4, col="blue") 
+```
+ 
+ii) Terminology
+
+$Z_1$: First principle component.
+
+$(\phi_{11}, \phi_{21})$ is called the loadings. 
+
+The entire $Z_1$,  one for each person, is called PC scores.
+
+```{r}
+# Here we go: PCA
+pc.parag.word <- prcomp(data.AFQT[, c("Parag", "Word")], scale=TRUE)
+names(pc.parag.word)
+```
+
+```{r}
+pc.parag.word$rotation # Loadings = phi's
+```
+
+```{r}
+phi_11 <- pc.parag.word$rotation[1,1]
+phi_21 <- pc.parag.word$rotation[2,1]
+```
+
+```{r}
+Z1 <- phi_11 * X1 + phi_21 * X2  # PC scores. The two scores should be the same possibly by a different sign
+max(abs(pc.parag.word$x[, 1]-Z1))   # Z1 and pc.parag.word$x[, 1] are the same.
+
+pc.parag.word$sdev  # sd(Z1) and sd(Z2)
+pc.parag.word$center  # means of the original scores
+```
+ 
+iii) Second Principal Component
+
+Similar to the first Principal Component, we are now looking for $\phi_{12}, \phi_{22}$, such that 
+    $$Z_2=\phi_{12} * X1 + \phi_{22} * X2$$
+where     
+
+$$Var(Z_2) = Var(\phi_{12} * X1 + \phi_{22} * X2)$$ 
+    
+is maximized subject to constraints $\phi_{12}^2+\phi_{22}^2=1$, and $Z_2$ and $Z_1$ are orthogonal.
+
+$Z_2$: Second principle component (PC2)
+
+```{r}
+# The loadings
+pc.parag.word$rotation # Loadings
+```
+
+```{r}
+Z2 <- pc.parag.word$x[,2]
+```
+
+```{r}
+# Let us verify
+plot(Z1, Z2, pch=16,
+     xlab="First Principal Component Z1",
+     ylab="Second Principal Component Z2", 
+     xlim=c(-4, 4),
+     ylim=c(-4, 4))
+abline(v=0, h=0, lwd=3, col="red")
+```
+
+```{r}
+# The sd's 
+pc.parag.word$sdev  # sd's of pc scores
+```
+ 
+ 1) The principal plot is a rotation for the original X1, X2 plot
+ 2) $$var(Z_1)=1.777 > var(Z_2)=0.223$$
+ 3) $Z_1$ and $Z_2$ are orthogonal
+ 
+```{r}
+cor(Z1, Z2) # is 0
+```
+
+
+
+**Principal Component of the four tests: Word, Math, Parag and Arith**
+
+**Question:**
+
+1) How can we best capture the performance based on the four tests?
+2) Can we come up with some sensible scores combining the four tests together?
+
+**PCs:**
+Looking for a linear transformation of X1=Word, X2=Parag, X3=Math, and X4=Arith to have the max variance.
+
+
+**First Principal Component is**
+
+$$Z_1=\phi_{11}*X_1 + \phi_{21}*X_2 + \phi_{31}*X_3 + \phi_{41}*X_4$$ 
+
+such that $Var(Z_1)$ is maximized with $\sum \phi_{i1}^2 = 1$.
+
+**Second Principal Component is**
+
+$$Z_2=\phi_{12}*X_1 + \phi_{22}*X_2 + \phi_{32}*X_3 + \phi_{42}*X_4$$ 
+such that $Var(Z_2)$ is maximized, $\sum \phi_{i2}^2=1$, and $Z_2$ and $Z_1$ are uncorrelated (Orthogonal). This is the same as the $\{\phi_{i,1}\}$ and $\{\phi_{i,2}\}$s are orthogonal.
+
+**We keep going to obtain Z3, and Z4**
+
+1) Scale and Center each score
+
+   To find sensible PC's, we recommend to 
+   - center each variable by subtracting its mean.
+   - scale each variable by dividing its sd.
+   - above two things can be achieved simultaneously by scale()
+   - prcomp() has an option to scale or not
+
+
+   <!-- Ready to get PC's for the data set -->
+   <!-- names(data.AFQT)    # four tests -->
+   <!-- summary(data.AFQT)  # unscaled yet -->
+
+```{r}
+data.AFQT.scale <- scale(data.AFQT, center=TRUE, scale = TRUE)
+summary(data.AFQT.scale)
+data.AFQT.scale <- as.data.frame(data.AFQT.scale)  # set it back as a data frame
+names(data.AFQT.scale)
+attach(data.AFQT.scale)
+```
+
+2) Use prcomp()
+   
+We input the original variables. BUT set scale=TRUE
+   
+```{r}
+pc.4 <- prcomp(data.AFQT, scale=TRUE)  # by default, center=True but scale=FALSE!!!
+names(pc.4)
+summary(pc.4)
+var(pc.4$x[, 1])
+
+# Loadings (directions)
+round(pc.4$rotation, 5) 
+```
+
+```{r}
+# PC1 scores: 
+phi1 <- pc.4$rotation[,1]   # PC1 loadings, unique up to the sign 
+Z1.1 <- phi1[1]*Word+phi1[2]*Parag+phi1[3]*Math+phi1[4]*Arith
+# Essentially it says that we should take the sum of the four test scores (after scaled)
+# This is same as 
+Z1 <- pc.4$x[, 1]
+max(abs(Z1.1-Z1))  # To convince you that two principal scores are the same.
+
+# PC2 scores
+Z2 <- pc.4$x[,2]
+```
+
+Interpretations of the pc scores:
+```{r}
+plot(pc.4$x[, 1], pc.4$x[,2 ], pch=16,
+     xlim=c(-4, 4),
+     ylim=c(-4, 4),
+     main="The leading two principal components",
+     xlab="Z1=PC1", 
+     ylab="Z2=PC2"
+     )
+abline(h=0, v=0)
+```
+
+**Z1:** total scores of the  4 tests
+
+**Z2:** sum of the word and parg - sum of the math's 
+
+**Remark:**
+
+i) Two scores Z1 and Z2 capture the main features of the four tests
+
+ii) How much information we might have lost by using only the two PC scores?
+
+NOT MUCH...
+
+
+**Properties of the pc scores:**
+
+i) var(Z1) > var(Z2) ....
+```{r}
+c(sd(Z1), sd(Z2))   # they are reported in 
+pc.4$sdev  # standard dev's of all PC's in a decreasing order
+```
+
+ii) All 4 pc sores are uncorrelated.
+```{r}
+cor(pc.4$x)   # cor's are 0
+```
+
+```{r}
+pairs(pc.4$x, xlim=c(-4, 4), ylim=c(-4, 4), col=rainbow(6), pch=16)
+```
+
+They are all pairwise uncorrelated!
+
+iii) Proportion of variance explained (PVE)
+```{r}
+pve.4 <- 100* (pc.4$sdev)^2/sum ((pc.4$sdev)^2)
+plot(pve.4, pch=16, 
+     xlab="Principal Components",
+     ylab="Prop. of variance explained")
+```
+
+The leading component explains pve.4[1]=75% of the total variance.
+
+Cumulative proportion of variance explained keeps track of the PVE including the first 1 PC, the first 2 PC's, and so on.
+
+```{r}
+cpve.4 <- 100*cumsum((pc.4$sdev)^2)/4   # cumulative proportions of the variance explained by 
+  # the number of pc's used
+
+plot(seq(1:4), cpve.4, pch=16, ylim=c(0, 100),
+     main="Cumulative Proportion of Variance Explained",
+     xlab="Number of PC's Used")
+
+names(summary(pc.4))
+summary(pc.4)$importance
+
+# Scree plot of CPVE's
+plot(summary(pc.4)$importance[3, ], pch=16,
+     ylab="Cumulative PVE",
+     xlab="Number of PC's",
+     main="Scree Plot of PCA for AFQT")
+
+plot(pc.4) # variances of each pc
+screeplot(pc.4) # var's each pc's
+```
+
+All the information is stored in summary(pc.4)
+
+iv) biplot: visualize the PC scores together with the loadings of the original variables
+```{r, fig.height = 6, fig.width = 6}
+lim <- c(-.4, .4) 
+biplot(pc.4, xlim=lim,
+       ylim=lim,
+       main="Biplot of the PC's")
+abline(v=0, h=0)
+# x-axis: PC1=Z1 (prop)
+# y-axis: PC2=Z2
+# top x-axis: prop to loadings for PC1
+# right y-axis: prop to loadings for PC2
+```
+
+**Summary:**
+1) To capture the main features of AFQT four scores we could use two summaries.
+
+   . Total scores (weighted)
+
+   . Difference of the math+arith and word+parag
+
+
+**Exercise: Perform PCA of all 10 tests**
+   
+   Does Gender play any roll in the test scores?
+
+
+
+
+\pagebreak
+
+## Part II:  Calculation of the PC's  
+
+PCs are nothing but eigen vectors/values of COR(X1,X2,... Xp) (if scaled) or COV(X1,X2) (unscaled)
+PCA are eigenvectors of Cor matrix
+
+```{r}
+PC.eig <- eigen(cor(data.AFQT))
+PC.eig
+summary(PC.eig)
+PC.eig$vectors   # Loadings
+PC.eig$values    # Variances of each PC's 
+```
+
+```{r}
+# We use prcomp() here
+PC <- prcomp(data.AFQT, scale=TRUE)
+PC  # should be exactly same as PC's from eigen decomposition (up to the sign)
+phi <- PC$rotation
+phi
+```
+
+```{r}
+cbind(PC.eig$vectors, PC$rotation) # Putting the first PC's together
+# one from eigen-values???the other from prcomp(). They should be exactly the same (to the sign) and 
+# they are the same.
+```
+
+phi as we expected is an orthogonal unit matrix, i.e., the columns are uncorrelated with norm to be 1. Also,
+
+$$inv(phi)=t(phi)!$$
+
+This can be seen from
+```{r}
+phi %*% t(phi)   # matrix operator %*%. It should be an identity matrix
+round(phi %*% t(phi), 2) # better seen if we round it.
+```
+
+
+\pagebreak
+
+## Part III:  Code for USArrests
+
+### PCA via prcomp
+
+```{r}
+states=row.names(USArrests)
+#states
+names(USArrests)
+apply(USArrests, 2, mean)
+apply(USArrests, 2, var)
+pr.out=prcomp(USArrests, scale=TRUE)
+# By default, the prcomp() function centers the variables to have mean zero.
+# By using the option scale=TRUE, we scale the variables to have standard deviation one.
+```
+
+```{r}
+names(pr.out)
+pr.out$center
+pr.out$scale
+pr.out$scale^2
+
+# The center and scale components correspond to the means and standard
+# deviations of the variables that were used for scaling prior to implementing PCA.
+# The prcomp() function also outputs the standard deviation of each principal component
+pr.out$sdev
+```
+
+\pagebreak
+```{r, fig.height = 6, fig.width = 6}
+# The rotation matrix provides the principal component loadings
+pr.out$rotation
+
+# The kth column is the kth principal component score vector
+dim(pr.out$x)
+
+# The scale=0 argument to biplot() ensures that the arrows are scaled to
+# represent the loadings
+biplot(pr.out, scale=0)
+
+# Recall that the principal components are only unique up to a sign change
+pr.out$rotation=-pr.out$rotation
+pr.out$x=-pr.out$x
+biplot(pr.out, scale=0)
+
+# The variance explained by each principal component is obtained by
+pr.var=pr.out$sdev^2
+pr.var
+pve=pr.var/sum(pr.var)
+pve
+```
+
+To compute the proportion of variance explained by each principal component, we simply divide the variance explained by each principal component by the total variance explained by all four principal components
+
+```{r}
+plot(pve, xlab="Principal Component", ylab="Proportion of Variance Explained", ylim=c(0,1),type='b')
+plot(cumsum(pve), xlab="Principal Component", ylab="Cumulative Proportion of Variance Explained", ylim=c(0,1),type='b')
+```
+
+We can plot the PVE explained by each component, as well as the cumulative PVE
+```{r}
+a=c(1,2,8,-3)
+cumsum(a)
+```
+
+
+### PCA via svd
+
+```{r, fig.height = 6, fig.width = 6}
+x.standardized <- scale(USArrests)
+x.mean <- apply(x.standardized, 2, mean)
+x.sd <- apply(x.standardized, 2, sd)
+x.svd <- svd(x.standardized)
+
+x.score1 <- x.standardized %*% x.svd$v
+x.score2 <- x.svd$u %*% diag(x.svd$d)
+max(abs((-pr.out$x-x.score1)))
+max(abs((-pr.out$x-x.score2)))
+x.svd$d / sqrt(nrow(x.score1)-1) - pr.out$sdev
+plot(-x.score1[,1],-x.score1[,2],xlim=c(-3,3),ylim=c(-3,3), pch=19)
+#par(mfrow=c(1,2))
+#biplot(pr.out, scale=0)
+#plot(-x.score1[,1],-x.score1[,2],xlim=c(-3,3),ylim=c(-3,3), pch=19)
+```
+
+
+\pagebreak
+
+## Part IV:  Simulation Example
+
+```{r}
+p <- 128
+theta1 <- c(2,0,rep(0,p-2))
+theta2 <- c(0,-2,rep(0,p-2))
+theta3 <- c(-1,1,rep(0,p-2))
+n <- 1002
+# the mean matrix
+mu <- rbind(matrix(rep(theta1,n/3),nrow=n/3,byrow=TRUE),
+            matrix(rep(theta2,n/3),nrow=n/3,byrow=TRUE),
+            matrix(rep(theta3,n/3),nrow=n/3,byrow=TRUE))
+# observed data
+x <- mu + matrix(rnorm(n*p),n)
+
+# oracle
+plot(x[,1],x[,2],col=rep(2:4,rep(n/3,3)),pch=rep(2:4,rep(n/3,3)))
+points(mu[,1],mu[,2],pch=19,cex=2)
+
+# svd, for singular value decomposition
+mu.hat <- apply(x,2,mean)
+x.centered <- x - rep(1,nrow(x))%*%t(mu.hat)
+x.svd <- svd(x.centered)
+
+# scree plot
+plot(x.svd$d)
+
+# plot PC projections
+plot(x.svd$u[,1]*x.svd$d[1],x.svd$u[,2]*x.svd$d[2],col=rep(2:4,rep(n/3,3)),pch=rep(2:4,rep(n/3,3)))
+```
+
+```{r, fig.height = 6, fig.width = 6}
+# plot the loadings
+par(mfrow=c(2,2), mar=c(2,2,2,1))
+plot(x.svd$v[,1])
+plot(x.svd$v[,2])
+plot(x.svd$v[,3])
+plot(x.svd$v[,4])
+```
+
+```{r}
+# generate random directions
+alpha <- matrix(rnorm(p*2),ncol=2)
+alpha <- qr.Q(qr(alpha))
+
+# plot random projection
+plot(x%*%alpha[,1],x%*%alpha[,2],col=rep(2:4,rep(n/3,3)),pch=rep(2:4,rep(n/3,3)))
+```
+
+```{r}
+# 3 projections together
+par(mfrow=c(1,3))
+plot(x[,1],x[,2],
+     col=rep(2:4,rep(n/3,3)),pch=rep(2:4,rep(n/3,3)),main="oracle projection")
+points(mu[,1],mu[,2],pch=19,cex=2)
+plot(x.svd$u[,1]*x.svd$d[1],x.svd$u[,2]*x.svd$d[2],
+     col=rep(2:4,rep(n/3,3)),pch=rep(2:4,rep(n/3,3)),main="PCA projection")
+plot(x%*%alpha[,1],x%*%alpha[,2],
+     col=rep(2:4,rep(n/3,3)),pch=rep(2:4,rep(n/3,3)),main="random projection")
+```

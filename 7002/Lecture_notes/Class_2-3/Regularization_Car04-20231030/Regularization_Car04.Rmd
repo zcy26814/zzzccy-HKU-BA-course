@@ -1,0 +1,634 @@
+---
+title: "Case Study: Miles Per Gallon (MPG) Prediction"
+author: 'MSBA7002: Business Statistics'
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+    keep_tex: yes
+    latex_engine: xelatex
+  word_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include = FALSE}
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE, fig.width=8, fig.height=4)
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(glmnet, leaps, car, tidyverse, mapproj,dplyr,ggpubr)
+```
+
+\pagebreak
+
+Read:
+
+* Chapter 6.1 and 2.2.1-2.2.2
+
+Objectives:
+
+1. Exploratory Data Analysis (EDA)
+    + Checking Missing Value
+    + Data Cleaning
+
+2. LASSO (Least Absolute Shrinkage and Selection Operator)
+    + Understand `glmnet()` & `cv.glmnet()`
+    + How to use Lasso Output
+
+3. K-Fold Cross Validation (Appendix III)
+    + Cross-Validation Error
+
+4. Ridge Regression
+5. Elastic Net
+    + Combination of Ridge Regression and LASSO
+    + $\alpha=0$ gives us Ridge Regression, $\alpha= 1$ gives us LASSO   
+
+## Case Study: Miles Per Gallon (MPG) Prediction
+
+- We will use `car04` data.
+
+- The dataset contains characteristics of various makes and models of cars from the 2003 and 2004 model years.
+
+**Goal of the study:**
+
+* How to use regularization method to choose an optimal model?
+
+* How to use Cross-Validation to choose tuning parameters?
+
+## 1. Exploratory Data Analysis (EDA)
+
+### Take a quick look at the data
+
+```{r}
+data.car0 <- read.csv("cars04.dat")
+```
+
+How many vehicles (observations) and variables are contained in the dataset?
+```{r}
+dim(data.car0)
+```
+
+Variable names
+```{r}
+names(data.car0)
+```
+
+Let's see if we have any missing values.
+```{r}
+sum(is.na(data.car0)) # many missing values!!!! 
+```
+
+We have `r sum(is.na(data.car0))` missing values. **Is there a way to know in which columns these missing values are?**
+```{r}
+sapply(data.car0, function(x) any(is.na(x))) 
+    # any(is.na(var)) is very useful, it returns T/F for each var!
+#apply(data.car, 2, function(x) any(is.na(x)))  # apply function by columns: column-wise missing 
+#apply(data.car, 1, function(x) any(is.na(x)))  # apply function by rows: row-wise missing
+```
+
+\pagebreak
+
+```{r}
+sapply(data.car0, function(x) sum(is.na(x)))
+```
+
+\pagebreak
+It looks like most of our missing values are for the `Cargo.Volume..EPA.`, `Passenger.Volume..EPA.`, `Combined.Fuel.Economy`, `Curb.Weight.AT`, `Curb.Weight.MT` and `Sales.Volume` variables.
+```{r}
+data.car <- data.car0[,-c(9,10,12,22,23,25)]
+```
+
+As we discussed in the Boot Camp, we take an inverse for MPG.City and create a new variable `GPHM` (Gallons Per Hundred Miles):
+$$GPHM = \frac{100}{\textrm{MPG.City}}.$$
+```{r}
+data.car$GPHM <- 100/data.car$MPG.City
+data.car <- data.car[,-1]
+```
+
+`MPG.Highway` just acts like the cheat sheet of this prediction and `Model` is unique for each vehicle. Hence, we delete both of them.
+
+```{r}
+data.car <- data.car[,-c(18,19)]
+```
+
+```{r}
+sapply(data.car, function(x) sum(is.na(x))) 
+```
+
+\pagebreak
+Let's ignore the vehicles with missing data for simplicity. 
+```{r}
+data.car <- na.omit(data.car)
+sum(is.na(data.car))
+```
+
+Check the observations and variables left. **Can we use `na.omit()` to ignore vehicles with missing data at the beginning?**
+```{r}
+dim(data.car)
+```
+
+The structure of the cleaned data.
+```{r}
+str(data.car)
+```
+
+The structure of `Model.Year` is incorrect. It should be a factor(dummy) instead of integer. Let's do a transformation
+```{r}
+data.car$Model.Year <- data.car$Model.Year %>% factor()
+```
+
+```{r}
+str(data.car)
+```
+
+Everything goes well. Let's start our analysis.
+
+\pagebreak
+## 2. Regularization 
+
+We now focus on linear models. 
+
+### Ordinary linear regression
+
+We first try `GPHM` vs. all variables through `lm()`. 
+
+Fit all variables with all states. **Note: the result is messy, so we hide it here**
+```{r}
+fit.all <- lm(GPHM~., data.car) # dump everything in the model
+summary(fit.all) 
+```
+
+\pagebreak
+
+### LASSO estimation
+
+Consider linear multiple regression models with $p$ predictors:
+$$Y = \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \dots + \beta_p x_{ip}.$$
+
+The OLS may have issues:
+
+- Overfit the data;
+- When p is large there are no unique solutions for OLS;
+- A smaller model is preferable for the ease of interpretation.
+
+One way to avoid the above problems is to add constraint on the coefficients. We start with LASSO regularization. 
+
+LASSO: we use the following solution to estimate coefficients,
+
+$$\min_{\beta_0,\,\beta_1,\,\beta_{2},\dots,\beta_{p}} \Big\{ \sum_{i=1}^{n} (y_i - \beta_0 - \beta_1 x_{i1} - \beta_2 x_{i2} - \dots - \beta_p x_{ip})^{2} + \lambda (|\beta_1|+|\beta_2| + \dots +|\beta_p|)\Big\}.$$
+
+**Remark on LASSO:**
+
+- $|\beta_1|+|\beta_2| + \dots +|\beta_p|$ is called $L$-1 penalty
+- $\lambda$ is called the tuning parameter
+- The solutions $\hat \beta_i^\lambda$ depends on $\lambda$
+    + $\hat \beta_i^\lambda$ are OLS when $\lambda=0$ and
+    + $\hat \beta_i^\lambda = 0$ when $\lambda \rightarrow \infty$
+- $\lambda$ is chosen by k-fold cross validation
+- $\hat \beta_i$ can be 0
+
+**More remarks:**
+
+- The predictors $x_i$ need to be standardized. Without standardization, the LASSO solutions would depend on the units.
+- **We use `glmnet` to produce LASSO estimate.**
+
+\pagebreak
+
+#### Preparation
+
+Prepare the input $X$ matrix and the response $Y$. `glmnet` requires inputting the design matrix $X=(x_1,...x_p)$ and the response variable $Y$. 
+```{r}
+Y.car <- data.car$GPHM # extract Y
+X.car <- model.matrix(GPHM~., data=data.car)[, -1]
+     # get X variables as a matrix. it will also code the categorical 
+     # variables correctly!. The first col of model.matrix is vector 1
+
+#X.car <- (model.matrix(~., data=data.car[, -23]))[, -1]  
+     # another way to get X. 
+colnames(X.car)
+```
+
+We save `X.car` and `Y.car` into a new dataframe. 
+```{r}
+matrix.car <- data.frame(GPHM = Y.car, X.car)
+```
+
+Remember we normalize the predictors before LASSO. However, the scaling is done properly internally with `glmnet()`. We could skip this step before our analysis.
+
+\pagebreak
+#### LASSO regression given a $\lambda$
+
+We first run `glmnet` with $\lambda = 0.1$. From the output, we can see the features that LASSO selected. Read and run the following code line by line to understand the output.
+```{r}
+fit.car.lambda <- glmnet(X.car, Y.car, alpha=1, lambda = 0.1) 
+names(fit.car.lambda)  
+fit.car.lambda$lambda # lambda used
+#fit.car.lambda$beta
+# Notice many of the coef's are 0 
+fit.car.lambda$a0    # est. of beta_0 
+```
+
+We see that, when $\lambda=0.1$, we return 8 variables with non-zero coefficient.
+```{r}
+fit.car.lambda$df    # number of non-zero coeff's
+```
+
+\pagebreak
+#### LASSO regression for a set of $\lambda$'s
+
+Now glmnet will output results for 100 different $\lambda$ values suggested by the algorithm. The output will consist of LASSO fits for each $\lambda$, respectively.
+```{r}
+fit.car.lasso <- glmnet(X.car, Y.car, alpha=1, 
+                        lambda = 10^seq(-3,0,length=100))
+fit.car.lasso$lambda # see the default proposal of lambda's
+```
+
+\pagebreak
+
+To help understanding the effect of $\lambda$, we may take a look at the following plot.
+
+```{r echo = FALSE}
+df.lasso <- fit.car.lasso$beta %>% as.matrix() 
+colnames(df.lasso) <- fit.car.lasso$lambda
+df.lasso <- df.lasso %>% reshape2::melt()
+colnames(df.lasso) <- c("Variables","lambda","Coefficients")
+
+p.lasso <- df.lasso %>%
+  ggplot(aes(x = lambda, y = Coefficients, color = Variables, shape = Variables)) +
+  geom_point() + scale_x_log10() +
+  scale_shape_manual(values=seq(0,dim(X.car)[2])) + 
+  ggtitle("Lasso: Lambda and Coefficients") + theme_classic() +
+  theme(legend.position="bottom") + theme(legend.title = element_blank()) +
+  theme(legend.text=element_text(size=8)) 
+
+p.lasso + theme(legend.position = "none")
+as_ggplot(get_legend(p.lasso))
+```
+
+The plot records the LASSO estimator of each variable as $\lambda$ changes. 
+
+It seems that `Weight` survives until the end as $\lambda$ increases. 
+
+\pagebreak
+
+We could also check the situation when $\lambda$ is small
+
+```{r echo = FALSE, warning = FALSE}
+p.lasso + theme(legend.position = "none") + ylim(-0.12,0.25)
+as_ggplot(get_legend(p.lasso))
+```
+
+\pagebreak
+#### Cross Validation to select a $\lambda$
+
+**The question becomes what is the optimal $\lambda$ to use.**
+
+Cross-validation over $\lambda$ gives us a set of errors: Mean CV Error,`cvm`, CV standard deviation  `cvsd`, CV Lower `cvlo` and  CV Upper `cvup`.
+
+To accomplish the Cross Validation, we use the function `cv.glmnet()`.  Once again read through the code below and run it line by line.
+
+```{r}
+set.seed(10) # Set seed to guarantee the result is reproducible
+fit.lasso.cv <- cv.glmnet(X.car, Y.car, alpha=1, nfolds=10,
+                        lambda = 10^seq(-3,0,length=100))
+```
+
+```{r}
+fit.lasso.cv$cvm               # the mean cv error for each lambda
+fit.lasso.cv$lambda.min        # lambda.min returns the min point amoth all the cvm. 
+fit.lasso.cv$nzero             # number of non-zero coeff's returned for each lambda
+```
+
+\pagebreak
+```{r, warning = F}
+df.lasso.cv <- data.frame(lambda = fit.lasso.cv$lambda, 
+                          cvm = fit.lasso.cv$cvm, nonzero = fit.lasso.cv$nzero)
+df.lasso.cv$uci <- df.lasso.cv$cvm + fit.lasso.cv$cvsd
+df.lasso.cv$lci <- df.lasso.cv$cvm - fit.lasso.cv$cvsd
+ggplot(df.lasso.cv, aes(x = lambda, y = cvm, color = nonzero)) + 
+  geom_point() +
+  scale_x_log10() +
+  scale_color_gradientn(colours = rainbow(5)) +
+  geom_errorbar(aes(ymin = lci, ymax= uci)) +
+  geom_vline(xintercept = fit.lasso.cv$lambda.min, linetype="dashed", col = "red") +
+  geom_vline(xintercept = fit.lasso.cv$lambda.1se, linetype="dashed", col = "blue") +
+  ggtitle("Cross-Validation: Lambda and Cross-Validation Mean Error") +
+  theme_classic()
+```
+
+This plot shows how cross validation error varies with $\lambda$. The smallest mean cv error occurs when $\lambda$ is around `r fit.lasso.cv$cvm[fit.lasso.cv$lambda.min==fit.lasso.cv$lambda]`. Specifically, our minimum error occurs when $\lambda$ is `r fit.lasso.cv$lambda.min`. This value changes a lot as a function of the number of folds. 
+
+We can also look at the number of non-zero coefficients. From this plot we show that as $\lambda \rightarrow \infty$, the impact of the shrinkage penalty grows, and the coefficient estimates will approach zero. Here, when $\lambda \approx 1$, all $\hat\beta$ are 0. When $\lambda \approx$ `r fit.lasso.cv$lambda.min`, they are `r fit.lasso.cv$nzero[fit.lasso.cv$lambda.min==fit.lasso.cv$lambda]` $\hat\beta$ that are non-zero.
+
+**Remark:**
+
+ + We may choose any lambda between lambda.min and lambda.1se, the largest $\lambda$ whose cvm is within the cvsd bar for the lambda.min value.
+
+ + We may also choose lambda controlled by `nzero`, number of non-zero elements.
+
+\pagebreak
+#### Output variables for the $\lambda$ chosen
+
+Once a specific $\lambda$ is chosen we will output the corresponding predictors.
+
+1. Output $\beta$'s from lambda.min, as an example
+
+```{r}
+coef.min <- coef(fit.lasso.cv, s="lambda.min")  #s=c("lambda.1se","lambda.min") or lambda value
+coef.min <- coef.min[which(coef.min !=0),]   # get the non=zero coefficients
+coef.min  # the set of predictors chosen
+#rownames(as.matrix(coef.min)) # shows only names, not estimates  
+#length(rownames(as.matrix(coef.min)))
+```
+
+
+2. output $\beta$'s from lambda.1se (this way you are using smaller set of variables.)
+```{r}
+coef.1se <- coef(fit.lasso.cv, s="lambda.1se")  
+coef.1se <- coef.1se[which(coef.1se !=0),] 
+coef.1se
+#rownames(as.matrix(coef.1se))
+```
+
+3. Choose the number of non-zero coefficients
+
+Suppose you want to use $\lambda$ such that it will return 9 n-zero predictors.
+```{r}
+coef.nzero <- coef(fit.lasso.cv, s = fit.lasso.cv$lambda[fit.lasso.cv$nzero==5])[,1]
+coef.nzero <- coef.nzero[which(coef.nzero !=0)]
+coef.nzero
+#rownames(as.matrix(coef.nzero)) #notice nzero may not take any integer.
+```
+
+\pagebreak
+### Final Model 
+
+#### Use variables chosen by LASSO
+
+Use the variables chosen from the LASSO output and use `lm()` to give us the second stage linear model.
+
+As an example, suppose we want to use the model whose $\lambda$ value is lambda.min. We will go through the next chunk to output the final linear model.
+
+```{r}
+coef.min <- coef(fit.lasso.cv, s="lambda.min")  #s=c("lambda.1se","lambda.min") or lambda value
+coef.min <- coef.min[which(coef.min !=0),]   # get the non-zero coefficients
+var.min <- rownames(as.matrix(coef.min)) # output the names
+lm.input <- as.formula(paste("GPHM", "~", paste(var.min[-1], collapse = "+"))) # prepare for lm fomulae
+lm.input
+```
+
+Finally we fit the linear model with LASSO output variables.
+
+```{r}
+fit.min.lm <- lm(lm.input, data=matrix.car)
+lm.output <- coef(fit.min.lm) # output lm estimates
+summary(fit.min.lm) 
+```
+
+**Remark:**
+
++ Not all the predictors in the above lm() are significant at .05 level. We will go one more step further to eliminate some insignificant predictors.
+
++ The LASSO estimates are different from that from lm which is shown below:
+
+```{r}
+comp <- data.frame(coef.min, lm.output)
+names(comp) <- c("estimates from LASSO", "lm estimates")
+comp
+```
+
+Still some variables are not significant. We still need to tune the model and end up with one that you think is acceptable!!!!!!
+
+\pagebreak
+#### Model Selection
+
+We create a function that takes an input from a data frame of the `regsubsets` output. 
+
+This function outputs A final model which achieves the following:
+
+  + All subset selection results
+  + Report the largest p-values with each model
+  + Return the final model who's largest $p$-value < $\alpha$
+
+```{r}
+fit.exh <- regsubsets(lm.input, nvmax= length(var.min)-1, method="exhau",  matrix.car)
+f.e <- summary(fit.exh)
+```
+
+```{r}
+coef(fit.exh, which.min(f.e$bic))
+```
+
+It seems that BIC criterion suggests us to keep the whole four variables. Check the optimal model suggested by Mallow's Cp criterion. Are there any differences? Why?
+
+\pagebreak
+#### Final Model
+
+```{r}
+var.exh <- names(coef(fit.exh, which.min(f.e$bic)))
+lm.final <- as.formula(paste("GPHM", "~", paste(var.exh[-1], collapse = "+")))
+lm.final
+```
+
+```{r}
+fit.final <- lm(lm.final, data=matrix.car)
+summary(fit.final) 
+```
+
+\pagebreak
+## 3. Other Regularization Methods
+
+### Ridge Regression - $L_2$ norm
+
+Once again, glmnet will be used. Ridge Regression is implemented similarly to LASSO. We just need to set $\alpha$ as 0. 
+```{r}
+fit.car.ridge <- glmnet(X.car, Y.car, alpha=0,
+                        lambda = 10^seq(-2,3,length=100))
+#plot(fit.car.ridge)
+```
+
+```{r echo = FALSE}
+df.ridge <- fit.car.ridge$beta %>% as.matrix() 
+colnames(df.ridge) <- fit.car.ridge$lambda
+df.ridge <- df.ridge %>% reshape2::melt()
+colnames(df.ridge) <- c("Variables","lambda","Coefficients")
+
+p.ridge <- df.ridge %>%
+  ggplot(aes(x = lambda, y = Coefficients, color = Variables, shape = Variables)) +
+  geom_point() + scale_x_log10() +
+  scale_shape_manual(values=seq(0,dim(X.car)[2])) +  
+  theme_classic() + theme(legend.position="bottom") +
+  theme(legend.title = element_blank()) +
+  ggtitle("Lasso: Lambda and Coefficients")
+
+p.ridge + theme(legend.position = "none")
+```
+
+```{r echo = FALSE}
+as_ggplot(get_legend(p.ridge))
+```
+
+We tune $\lambda$ via Cross-Validation.
+```{r}
+fit.ridge.cv <- cv.glmnet(X.car, Y.car, alpha=0, nfolds=10,
+                        lambda = 10^seq(-3,1,length=100)) 
+#plot(fit.ridge.cv)
+```
+
+```{r, warning = F, echo = FALSE}
+df.ridge.cv <- data.frame(lambda = fit.ridge.cv$lambda, 
+                          cvm = fit.ridge.cv$cvm, nonzero = fit.ridge.cv$nzero)
+df.ridge.cv$uci <- df.ridge.cv$cvm + fit.ridge.cv$cvsd
+df.ridge.cv$lci <- df.ridge.cv$cvm - fit.ridge.cv$cvsd
+ggplot(df.ridge.cv, aes(x = lambda, y = cvm, color = nonzero)) + 
+  geom_point() +
+  scale_x_log10() +
+  scale_color_gradientn(colours = rainbow(5)) +
+  geom_errorbar(aes(ymin = lci, ymax= uci)) +
+  geom_vline(xintercept = fit.ridge.cv$lambda.min, linetype="dashed", col = "red") +
+  geom_vline(xintercept = fit.ridge.cv$lambda.1se, linetype="dashed", col = "blue") +
+  ggtitle("Cross-Validation: Lambda and Cross-Validation Mean Error") +
+  theme_classic()
+```
+
+Oops, is something wrong? All the features are returned!
+
+**Remark:**
+
++ Ridge regression doesn't cut any variable
++ The solutions are unique though
+
+\pagebreak
+### Elastic Net (More advanced)
+
+Elastic Net combines Ridge Regression and LASSO, by choosing $\alpha \ne 1,0$. An $\alpha$ near 0 will put more emphasis towards Ridge Regression. For us, we want $\alpha$ close to 1 so that it will do feature selection, yet still benefit from Ridge Regression.
+```{r}
+fit.car.lambda <- glmnet(X.car, Y.car, alpha=.99,
+                         lambda = 10^seq(-3,1,length=100)) 
+fit.enet.cv <- cv.glmnet(X.car, Y.car, alpha=.99, nfolds=10,
+                         lambda = 10^seq(-3,1,length=100))  
+#plot(fit.enet.cv)
+```
+
+```{r, warning = F, echo = FALSE}
+df.enet.cv <- data.frame(lambda = fit.enet.cv$lambda, 
+                          cvm = fit.enet.cv$cvm, nonzero = fit.enet.cv$nzero)
+df.enet.cv$uci <- df.enet.cv$cvm + fit.enet.cv$cvsd
+df.enet.cv$lci <- df.enet.cv$cvm - fit.enet.cv$cvsd
+ggplot(df.enet.cv, aes(x = lambda, y = cvm, color = nonzero)) + 
+  geom_point() +
+  scale_x_log10() +
+  scale_color_gradientn(colours = rainbow(5)) +
+  geom_errorbar(aes(ymin = lci, ymax= uci)) +
+  geom_vline(xintercept = fit.enet.cv$lambda.min, linetype="dashed", col = "red") +
+  geom_vline(xintercept = fit.enet.cv$lambda.1se, linetype="dashed", col = "blue") +
+  ggtitle("Cross-Validation: Lambda and Cross-Validation Mean Error") +
+  theme_classic()
+```
+
+\pagebreak
+### Regularization in General (For Additional Reading)
+
+LASSO uses $L_1$ penalty and Ridge uses $L_2$ penalty. In general we may choose the following penalty functions:
+
+$$\frac{1-\alpha}{2}||\beta||_2^2 + \alpha ||\beta||_1.$$
+
+  + Here $||\beta||_2^2$ is called the $L_2$ Norm and $||\beta||_1$ is called the $L_1$ Norm.
+
+We now take this penalty term and add it to our original minimization problem, which just minimizes the sum of squared error. Therefore, our new minimization function becomes:
+
+$$\text{minimize } \frac{RSS}{2n} + \lambda \left( \frac{1-\alpha}{2}||\beta||_2^2 + \alpha ||\beta||_1 \right).$$
+
+**Remark:**
+
++ $0 \leq \alpha \leq 1$ is another tuning parameter as well as $\lambda$
++ LASSO: When $\alpha=1$
++ Ridge: When $\alpha=0$
++ Elastic Net for any $\alpha$
+
+
+**Note:** When $\lambda = 0$, the penalty term has no effect, and will produce the least squares estimates. However, as $\lambda \rightarrow \infty$, the impact of the shrinkage penalty grows, and the coefficient estimates will approach zero.
+
+## 4. Appendix
+
+### Appendix I: `lm()` vs. `glmnet(lambda=0)`
+
+`glmnet` should output OLS estimates when lambda=0
+```{r}
+X.car.0 <- model.matrix(GPHM ~ Weight + Horsepower, data.car)[, -1]
+```
+
+Next, a fit when $\lambda = 0$:
+```{r}
+fit.lasso.0 <- glmnet(X.car.0,Y.car, alpha=1, lambda=0)    # glmnet when lambda=0
+coef(fit.lasso.0)
+```
+
+As a check, we fit a linear model using the same predictors as above. This gives us the OLS estimates.
+```{r}
+fit.lm <- lm(GPHM ~ Weight + Horsepower, data.car)
+coef(fit.lm)  
+```
+
+### Appendix II - More On Cross Validation
+
+Which lambda to use?????? We use k fold cross validation. Let's explore the effect of $\lambda$. We may use `cv.glmnet()` to find the best $\lambda$. `cv.glmnet()` outputs the nfolds of errors for each lambda.
+
+By default `nfolds=10`, the smallest value can be 3 and the largest can be $n$, i.e. leave-one-out-Cross-Validation (LOOCV). 
+
+By default `type.measure = "deviance"` which is $MSE$ in our case.
+
+  + type.measure="class" will be classification error
+  + type.measure can also be "auc", "mse"
+
+`cv.glmnet` will choose a set of $\lambda$'s to use. 
+
+### Appendix III - K-Fold Cross Validation
+
+The simplest way to estimate prediction errors with a training set is called K-Fold Cross Validation.
+To compute K-fold cross validation error, we use the following algorithm. 
+
+1. We split our data into $K$ sections, called folds. So if our training set has 1000 observations, we can set $K$ = 10 & randomly split our data set into 10 different folds each containing 100 observations. 
+
+2. We then train a model on all the folds except 1, i.e. we train the model on 9 out of the 10 folds. 
+
+3. Next, we test our model using the fold that was **NOT** used to train the model on and store the $MSE$ on that fold. 
+
+4. We repeat this procedure for each fold. So each fold is left out of the training set once and used to test the model on. This means we will have $K$ $MSE$ values, one for each fold. 
+
+5. We average these $MSE$ values, and this gives us an estimate of the training error. 
+
+In more mathematical terms:
+
+<!-- Let $\mathcal{D}$ be our training sample. Defined as: -->
+
+<!-- $$\mathcal{D} = -->
+<!--  \begin{pmatrix} -->
+<!--  1&  x_{11} & x_{12} & \dots & x_{1p} \\ -->
+<!--  1&  x_{21} & x_{22} & \dots & x_{1p} \\ -->
+<!-- \vdots & \vdots & \vdots & \ddots & \vdots \\ -->
+<!--  1&   x_{n1} & x_{n2} & \dots & x_{np}  -->
+<!--  \end{pmatrix}$$  -->
+
+Divide our data set at **random** into $K$ sets of equal size, $S_1,\dots,S_K$. Each set is called a fold. 
+
+Now For $k = 1, \dots, K$ we do the following:
+
+1. Train our model using the following training set:
+    $$\mathcal{D}_k = \bigcup_{j\ne k} S_j.$$
+**Note that $\mathcal{D}_k$ contains all folds *except* the $k$'th fold.**
+
+2. Compute Mean Squared Error on the $k$'th fold, i.e. the fold that was not used to train our model:
+  
+$$MSE_k = \frac{1}{n}\sum_{(x_{ip}) \in S_k}^n (y_i - \hat\beta_0 - \hat\beta_1 x_{i1} - \ldots  - \hat\beta_p x_{ip})^{2}.$$
+3. After doing this for each fold, The cross validation error is the average error across all folds:
+  $$error = \frac{1}{K} \sum_{k=1}^K MSE_k.$$
