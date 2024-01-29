@@ -1,0 +1,257 @@
+---
+title: '7027HW1'
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+library(ISLR)
+library(splines)
+library(boot)
+library(MASS)
+library(e1071)
+```
+
+# Q1
+This question uses the variables horsepower and mpg from the Auto data as part of the ISLR package. 
+We will treat horsepower as the predictor and mpg as the response.
+
+## (a) Use the poly() function to fit a cubic polynomial regression to predict mpg using horsepower. Report the regression output, and plot the resulting data and polynomial fits.
+```{r}
+fit1a<-lm(mpg~poly(horsepower,3),data=Auto)
+summary(fit1a)
+```
+
+```{r}
+horsepowerlims=range(Auto$horsepower)
+horsepower.grid=seq(from=horsepowerlims[1],to=horsepowerlims[2])
+preds<-predict(fit1a,newdata=list(horsepower=horsepower.grid),se=TRUE)
+plot(Auto$horsepowe,Auto$mpg,xlim=horsepowerlims,cex=.5,col="darkgray")
+lines(horsepower.grid,preds$fit,lwd=2,col="blue")
+se.bands <-cbind(preds$fit+2*preds$se.fit,preds$fit-2*preds$se.fit)
+matlines(horsepower.grid,se.bands,lwd=1, col='blue',lty=3)
+```
+
+## (b) Use the bs() function to fit a cubic spline to predict mpg using horsepower. Report the output for the fit using six degrees of freedom. How did you choose the knots? Plot the resulting fit.   
+```{r}
+fit1b<-lm(mpg~bs(horsepower,df=6),data=Auto)
+summary(fit1b)
+```
+
+```{r}
+attr(bs(Auto$horsepower,df=6),"knots")
+```
+
+```{r}
+horsepowerlims=range(Auto$horsepower)
+horsepower.grid=seq(from=horsepowerlims[1],to=horsepowerlims[2])
+preds<-predict(fit1b,newdata=list(horsepower=horsepower.grid),se=TRUE)
+plot(Auto$horsepowe,Auto$mpg,xlim=horsepowerlims,cex=.5,col="darkgray")
+lines(horsepower.grid,preds$fit,lwd=2,col="blue")
+se.bands <-cbind(preds$fit+2*preds$se.fit,preds$fit-2*preds$se.fit)
+matlines(horsepower.grid,se.bands,lwd=1, col='blue',lty=3)
+```
+
+## (c) Now fit a cubic spline for degrees of freedom ranging from 4 to 12, and plot the resulting fits as well as the resulting RSS. Describe the results obtained.
+```{r}
+rss.errors <- c()
+
+for(i in 4:12){
+  fit1c<-lm(mpg~bs(horsepower,i),data=Auto)
+  rss.errors[i] <- sum(fit1c$residuals^2)
+}
+plot(rss.errors, type='b', pch = 19, xlab = 'Degrees', ylab='RSS')
+which.min(rss.errors)
+```
+
+The smallest RSS occurs when df=12.
+
+## (d) Perform cross-validation to select the best degrees of freedom for a cubic spline on this data. Describe your results.
+```{r}
+require(boot)
+set.seed(1)
+
+cv.errors <- rep(NaN, 12)
+
+for (i in 4:12){
+fit1d<-glm(mpg~bs(horsepower,i),data=Auto)
+cv.errors[i] <- cv.glm(Auto, fit1d, K=10)$delta[1]
+}
+
+cv.errors
+which.min(cv.errors)
+```
+
+The optimal df selected by cross-validation is 12.
+
+## (e) Use the ns() function to fit a natural cubic spline to predict mpg using horsepower. Report the output for the fit using degrees of freedom s.t. number of knots is the same as (b). Plot the resulting fit.
+```{r}
+fit1e<-lm(mpg~ns(horsepower,df=6),data=Auto)
+summary(fit1e)
+```
+
+```{r}
+attr(ns(Auto$horsepower,df=6),"knots")
+```
+
+```{r}
+horsepowerlims=range(Auto$horsepower)
+horsepower.grid=seq(from=horsepowerlims[1],to=horsepowerlims[2])
+preds<-predict(fit1e,newdata=list(horsepower=horsepower.grid),se=TRUE)
+plot(Auto$horsepowe,Auto$mpg,xlim=horsepowerlims,cex=.5,col="darkgray")
+lines(horsepower.grid,preds$fit,lwd=2,col="blue")
+se.bands <-cbind(preds$fit+2*preds$se.fit,preds$fit-2*preds$se.fit)
+matlines(horsepower.grid,se.bands,lwd=1, col='blue',lty=3)
+```
+
+## (f) Now fit a natural cubic spline for a range of degrees of freedom, and plot the resulting fits as well as the resulting RSS. Describe the results obtained.
+```{r}
+rss.errors <- rep(NA, 12)
+
+for(i in 4:12){
+  fit1f <- lm(mpg ~ bs(horsepower, df=i), data=Auto)
+  rss.errors[i] <- sum(fit1f$residuals^2)
+}
+rss.errors
+which.min(rss.errors)
+```
+
+The smallest RSS occurs when df=12.
+
+## (g) Perform cross-validation to select the best degrees of freedom for a natural cubic spline on this data. Describe your results.
+```{r}
+require(boot)
+set.seed(1)
+
+cv.errors <- rep(NaN, 12)
+
+for (i in 1:12){
+  fit1g<-glm(mpg~ns(horsepower,i),data=Auto)
+  cv.errors[i] <- cv.glm(Auto, fit1g, K=10)$delta[1]
+}
+
+cv.errors
+which.min(cv.errors)
+```
+
+The optimal df selected by cross-validation is 10.
+
+## (h) Compare your results of (d) and (g), choose the best model for cubic spline and natural cubic spline respectively. Which one performs the best? With how many knots?
+The result of (g) is smaller than (d), thus we choose natural cubic spline. 
+The df is 10.
+There are 9 knots in R.
+
+# Q2
+This problem involves the Boston data set which is from the MASS package. We will fit classification models in order to predict whether a given suburb has a crime rate above or below the median.
+Preliminary step: Create an extra column crimAbvMed which is 1 if crime rate is above median and 0 otherwise. Then delete the crime rate column crim.
+```{r}
+require(MASS)
+
+data(Boston)
+attach(Boston)
+```
+
+```{r}
+Boston$crimAbvMed <- ifelse(Boston$crim > median(Boston$crim), 1, 0)
+Boston <- subset(Boston, select = -c(crim))
+head(Boston)
+```
+
+## (a) Create a training set containing a random sample of 80% of the observations, and a test set containing the remaining observations.
+```{r}
+set.seed(1)
+
+trainIndex <- sample(nrow(Boston), 0.8 * nrow(Boston))
+trainData <- Boston[trainIndex, ]
+testData <- Boston[-trainIndex, ]
+```
+
+## (b) Fit a linear support vector classifier to the training data. Use the tune() function to select an optimal cost. Consider values in the range of 0.001 to 100.
+```{r}
+set.seed(1)
+
+tuned_svm <- tune(svm, crimAbvMed~ ., data = trainData, kernel = "linear", ranges=list(cost=c(0.001,0.01,0.1,1,10,100)))
+summary(tuned_svm)
+```
+
+The best cost is 0.001.
+
+```{r}
+svm_model = svm(crimAbvMed ~ ., data = trainData, kernel = "linear",cost = 0.001,type = "C-classification")
+summary(svm_model)
+```
+
+## (c) Compute the training and test error rates using this new value of cost.
+```{r}
+train2c=table(true=Boston[trainIndex,"crimAbvMed" ], pred=predict(svm_model,newdata=trainData))
+train2c
+cat('train error rate =',1-sum(diag(train2c))/sum(train2c))
+```
+
+```{r}
+test2c=table(true=Boston[-trainIndex,"crimAbvMed" ], pred=predict(svm_model,newdata=testData))
+test2c
+cat('test error rate =',1-sum(diag(test2c))/sum(test2c))
+```
+
+## (d) Repeat parts (b) through (c) using a support vector machine with a radial kernel. Tune both gamma and cost.
+```{r}
+set.seed(1)
+
+tuned_svm <- tune(svm, crimAbvMed~ ., data = trainData, kernel = "radial", ranges=list(cost=c(0.001,0.01,0.1,1,10,100),gamma=c(0.5,1,2,3,4)))
+summary(tuned_svm)
+```
+
+```{r}
+svm_model = svm(crimAbvMed ~ ., data = trainData, kernel = "radial", gamma=0.5,cost = 1,type = "C-classification")
+summary(svm_model)
+```
+
+```{r}
+train2d=table(true=Boston[trainIndex,"crimAbvMed" ], pred=predict(svm_model,newdata=trainData))
+train2d
+cat('train error rate =',1-sum(diag(train2d))/sum(train2d))
+```
+
+```{r}
+test2d=table(true=Boston[-trainIndex,"crimAbvMed" ], pred=predict(svm_model,newdata=testData))
+test2d
+cat('test error rate =',1-sum(diag(test2d))/sum(test2d))
+```
+
+## (e) Repeat parts (b) through (c) using a support vector machine with a polynomial kernel. Tune both degree and cost.
+```{r}
+set.seed(1)
+
+tuned_svm <- tune(svm, crimAbvMed~ ., data = trainData, kernel = "polynomial", ranges=list(cost=c(0.001,0.01,0.1,1,10,100),degree=c(1,2,3,4)))
+summary(tuned_svm)
+```
+
+```{r}
+svm_model = svm(crimAbvMed ~ ., data = trainData, kernel = "polynomial", degree=4,cost = 10,type = "C-classification")
+summary(svm_model)
+```
+
+```{r}
+train2e=table(true=Boston[trainIndex,"crimAbvMed" ], pred=predict(svm_model,newdata=trainData))
+train2e
+cat('train error rate =',1-sum(diag(train2e))/sum(train2e))
+```
+
+```{r}
+test2e=table(true=Boston[-trainIndex,"crimAbvMed" ], pred=predict(svm_model,newdata=testData))
+test2e
+cat('test error rate =',1-sum(diag(test2e))/sum(test2e))
+```
+
+## (f) Overall, which approach seems to give the best results on this data set?
+Radial kernel is best.

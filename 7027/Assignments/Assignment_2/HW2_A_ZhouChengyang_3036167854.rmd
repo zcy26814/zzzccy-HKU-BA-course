@@ -1,0 +1,232 @@
+---
+title: '7027HW2'
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+rm(list = ls())
+knitr::opts_chunk$set(echo = TRUE, fig.width=8, fig.height=4)
+if(!require('pacman')) {
+  install.packhorsepowers('pacman')
+}
+pacman::p_load(dplyr,ISLR,splines,caret,boot,MASS,e1071,recipes,rsample,ranger,vip,gridExtra,gbm,pdp)
+```
+
+# Q1
+Load the dataset from HW2_house_dataset.csv. You will implement some treebased methods to predict housing prices. 
+Basic characteristics of the dataset are given as follows:
+- Problem type: supervised learning, regression
+- Response variable: selling price of houses (in log10 units)
+- Data variable name in R: “price”
+- Number of features: 17
+- Number of observations: 21,613
+- Task: use house attributes to predict sale price of a house
+
+## (1) Set seed
+```{r}
+hw2 <- read.csv("HW2_house_dataset.csv", header = TRUE)
+hw2$condition = as.factor(hw2$condition)
+head(hw2)
+
+set.seed(123)
+```
+
+# (2) Perform stratified sampling, use 80% as training and 20% as testing. Do not touch the testing data until the last problem (6).
+```{r}
+trainIndex <- sample(nrow(hw2), 0.8 * nrow(hw2))
+
+trainData <- hw2[trainIndex, ]
+testData <- hw2[-trainIndex, ]
+```
+
+# (3) Perform random forest (RF) on the training data. Find the best tuning parameters and describe how you find them, and after that report the smallest cross-validated RMSE on the training data. Which four predictors are the most important? Obtain PDPs for these four predictors, describe them and provide possible explanations.
+```{r}
+n_features <- length(setdiff(names(trainData),"price"))
+q3 <- ranger(
+  price ~ .,
+  data = trainData,
+  mtry = floor(n_features/3),
+  respect.unordered.factors = "order",
+  seed = 123
+)
+
+default_rmse <- sqrt(q3$prediction.error)
+```
+
+```{r}
+hyper_grid <- expand.grid(
+  mtry = floor(n_features * c(0.05,0.15,0.25,0.333,0.4)),
+  min.node.size = c(1,3,5,10),
+  replace = c(TRUE,FALSE),
+  sample.fraction = c(0.5,0.63,0.8),
+  rmse = NA
+)
+
+for(i in seq_len(nrow(hyper_grid))){
+  fit <- ranger(
+    formula = price~.,
+    data = trainData,
+    num.trees = n_features * 10,
+    mtry = hyper_grid$mtry[i],
+    min.node.size = hyper_grid$min.node.size[i],
+    replace = hyper_grid$replace[i],
+    sample.fraction = hyper_grid$sample.fraction[i],
+    verbose = FALSE,
+    seed = 123,
+    respect.unordered.factors = 'order',
+  )
+  hyper_grid$rmse[i] <- sqrt(fit$prediction.error)
+}
+hyper_grid %>%
+  arrange(rmse) %>%
+  mutate(perc_gain = (default_rmse - rmse)/default_rmse * 100)%>%
+  head(1)
+```
+
+According to the result, mtry = 7, min.node.size = 5, replace = FALSE, sample.fraction = 0.63.
+The smallest rmse is 0.0789.
+
+```{r}
+q3_impurity <- ranger(
+    formula = price~.,
+    data = trainData,
+    num.trees = n_features * 10,
+    mtry = 7,
+    min.node.size = 5,
+    replace = FALSE,
+    importance = 'impurity',
+    sample.fraction = 0.63,
+    verbose = FALSE,
+    seed = 123,
+    respect.unordered.factors = 'order',
+  )
+
+q3_permutation <- ranger(
+    formula = price~.,
+    data = trainData,
+    num.trees = n_features * 10,
+    mtry = 7,
+    min.node.size = 5,
+    replace = FALSE,
+    importance = 'permutation',
+    sample.fraction = 0.63,
+    verbose = FALSE,
+    seed = 123,
+    respect.unordered.factors = 'order',
+  )
+
+p1 <- vip::vip(q3_impurity, num_features = 5, scale = TRUE)
+p2 <- vip::vip(q3_permutation, num_features = 5, scale = TRUE)
+gridExtra::grid.arrange(p1,p2,nrow = 1)
+```
+
+According to the result, the most four important predictors are lattitude, sqft_living, nn_sqft_livings and sqft_above.
+
+```{r}
+partial(q3_impurity, pred.data = trainData, pred.var = "lattitude",plot = TRUE)
+partial(q3_impurity, pred.data = trainData, pred.var = "sqft_living",plot = TRUE)
+partial(q3_impurity, pred.data = trainData, pred.var = "nn_sqft_living",plot = TRUE)
+partial(q3_impurity, pred.data = trainData, pred.var = "sqft_above",plot = TRUE)
+```
+
+lattitude: The PDP shows that the house price will first increase and than decrease. The price increases rapidly between 47.5 and 47.7. 
+Houses whose lattitude's locations are too high or too low in elevation are not convenient for human life.
+
+sqft_living: The PDP shows that the house price will increase rapidly before 7000 and than increase slowly.
+The more space will lead to the higher price.When the space is big enough, increasing space will not have too much attraction.
+
+nn_sqft_living & sqft_above: The PDP and possible reason is similar to sqft_living.
+
+# (4) Repeat (3) for basic GBM algorithm.
+```{r}
+hyper_grid <- expand.grid(
+  shrinkage = c(0.001,0.01,0.1),
+  depth = c(3,5),
+  n = c(5,10),
+  rmse = NA
+)
+
+for(i in seq_len(nrow(hyper_grid))){
+  fit <- gbm(
+    formula = price~.,
+    data = trainData,
+    distribution = "gaussian",
+    n.trees = 5000,
+    shrinkage = hyper_grid$shrinkage[i],
+    interaction.depth = hyper_grid$depth[i],
+    n.minobsinnode = hyper_grid$n[i],
+    cv.folds = 10
+  )
+  best <- which.min(fit$cv.error)
+  hyper_grid$rmse[i] <- sqrt(fit$cv.error[best])
+}
+hyper_grid = hyper_grid[order(hyper_grid$rmse),]
+hyper_grid 
+```
+
+According to the result, shrinkage = 0.1, depth = 5, n = 10.
+The smallest rmse is 0.0737.
+
+```{r}
+gbm <- gbm(
+    formula = price~.,
+    data = trainData,
+    distribution = "gaussian",
+    n.trees = 5000,
+    shrinkage = 0.1,
+    interaction.depth = 5,
+    n.minobsinnode = 10,
+    cv.folds = 10
+  )
+p <- vip::vip(gbm,num_features=4,scale=TRUE)
+grid.arrange(p)
+```
+
+According to the result, the most four important predictors are sqft_living, lattitude, nn_sqft_living and longitude.
+
+```{r}
+gbmfunc <- function(object,newdata){
+  results=mean(predict(object,newdata,n.trees=1336))
+  return(results)
+}
+partial(gbm, pred.data = trainData, pred.var = "sqft_living",pred.fun = gbmfunc,plot = TRUE,recursive = FALSE)
+partial(gbm, pred.data = trainData, pred.var = "lattitude",pred.fun = gbmfunc,plot = TRUE,recursive = FALSE)
+partial(gbm, pred.data = trainData, pred.var = "nn_sqft_living",pred.fun = gbmfunc,plot = TRUE,recursive = FALSE)
+partial(gbm, pred.data = trainData, pred.var = "longitude",pred.fun = gbmfunc,plot = TRUE,recursive = FALSE)
+```
+
+sqft_living: The PDP shows that the house price will increase rapidly before 7000 and than increase slowly, and the increase trend fluctuates slightly.
+The more space will lead to the higher price.When the space is big enough, increasing space will not have too much attraction.
+
+lattitude: The PDP shows that the house price will first increase and than decrease. The price increases rapidly between 47.5 and 47.7. 
+
+nn_sqft_living: The PDP and possible reason is similar to sqft_living.
+
+longitude: The PDP shows that the house price will decrease with the increase of longitude.
+Maybe the houses that located in the east is better than those in west.
+
+# (5) Are the four most important variables different in (3)-(4)?
+The most four important predictors in RF are lattitude, sqft_living, nn_sqft_livings and sqft_above.
+While in GBM are sqft_living, lattitude, nn_sqft_living and longitude.
+Relatively the diference between them are little.
+
+# (6) Among RF and GBM with their own best-tuning parameters, which one has the smallest cross￾validated RMSE on the training data? Choose that method, refit the model with all of the training data, use that model to make prediction on the testing data, report the RMSE for the testing data. Is the obtained RMSE smaller or larger than the cross-validated RMSE?
+On the training data, the GBM(0.0737) has a samller RMSE than the RF(0.0789).
+
+```{r}
+prediction <- predict(gbm, newdata = testData)
+rmse <- sqrt(mean((prediction - testData$price)^2))
+rmse
+```
+
+It is larger than the cross-validated RMSE.
